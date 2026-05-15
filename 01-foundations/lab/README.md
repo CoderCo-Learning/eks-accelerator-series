@@ -85,7 +85,17 @@ kubectl exec data-0 -- cat /data/hello
 
 Lesson: `data-0` is bound to its PVC for life. Deleting the pod does not delete the disk. This is the only reason to use a StatefulSet.
 
-Now do something destructive on purpose:
+## Things to try if you have time
+
+Run these while the Deployment and StatefulSet are still up. The next section deletes them.
+
+- Scale the Deployment up to 10: `kubectl scale deployment nginx --replicas=10`. Watch the new pods schedule across workers
+- Scale the StatefulSet up to 3: `kubectl scale statefulset data --replicas=3`. Watch the pods come up in order (0, 1, 2)
+- Scale the StatefulSet back down to 1: `kubectl scale statefulset data --replicas=1`. Watch the pods come down in reverse order (2, 1, 0)
+- Run `kubectl describe statefulset data`. Read the events
+- Run `kubectl get storageclass`. The default class in `kind` is `standard`, backed by the local path provisioner. On EKS you will swap this for `gp3`
+
+## Now do something destructive on purpose
 
 ```bash
 kubectl delete statefulset data
@@ -100,11 +110,3 @@ Lesson: deleting a StatefulSet does not delete its PVCs. You delete those explic
 ```bash
 kind delete cluster --name eks-accel
 ```
-
-## Things to try if you have time
-
-- Scale the Deployment up to 10. Watch the new pods schedule across workers
-- Scale the StatefulSet up to 3. Watch the pods come up in order (0, 1, 2)
-- Scale the StatefulSet back down to 1. Watch the pods come down in reverse order (2, 1, 0)
-- Run `kubectl describe statefulset data`. Read the events
-- Run `kubectl get storageclass`. The default class in `kind` is `standard`, backed by the local path provisioner. On EKS you will swap this for `gp3`
