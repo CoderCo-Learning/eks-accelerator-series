@@ -183,7 +183,8 @@ kubectl delete pod nginx                  # gone, not coming back
 # 2. A Deployment (replicas + self healing)
 kubectl apply -f 02-deployment.yaml
 kubectl get pods
-kubectl delete pod -l app=nginx           # watch it come back
+POD=$(kubectl get pods -l app=nginx -o name | head -1)
+kubectl delete "$POD"                     # watch a new pod take its place
 
 # 3. A Service in front of the Deployment
 kubectl apply -f 03-service.yaml
@@ -193,9 +194,10 @@ curl localhost:8080
 # 4. A StatefulSet with a PVC per pod
 kubectl apply -f 04-statefulset.yaml
 kubectl get pvc
-kubectl exec -it data-0 -- sh -c 'echo hi > /data/hello; cat /data/hello'
+kubectl exec data-0 -- sh -c 'echo hi > /data/hello; cat /data/hello'
 kubectl delete pod data-0                 # comes back with the same PVC, same file
-kubectl exec -it data-0 -- cat /data/hello
+kubectl wait --for=condition=Ready pod/data-0 --timeout=60s
+kubectl exec data-0 -- cat /data/hello
 ```
 
 The point of step 4 is the moment the file survives a pod delete. Sit with that for a minute. That is the whole reason StatefulSets exist.

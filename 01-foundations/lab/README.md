@@ -49,9 +49,10 @@ Lesson: a bare Pod has no controller. Nothing brings it back.
 kubectl apply -f 02-deployment.yaml
 kubectl get pods -l app=nginx        # three pods
 
-# kill one
-kubectl delete pod -l app=nginx --field-selector status.phase=Running | head -1
-kubectl get pods -l app=nginx -w     # a new one shows up
+# kill one (pick the first pod name and delete it)
+POD=$(kubectl get pods -l app=nginx -o name | head -1)
+kubectl delete "$POD"
+kubectl get pods -l app=nginx -w     # a new one shows up with a new name
 ```
 
 Lesson: the Deployment owns a ReplicaSet that owns the Pods. Delete a pod, get a new one. Delete the Deployment, the lot is gone.
