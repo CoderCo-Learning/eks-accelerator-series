@@ -23,6 +23,9 @@ brew install kind
 ```bash
 kind create cluster --config kind-config.yaml --name eks-accel
 kubectl cluster-info --context kind-eks-accel
+
+# workers take a few seconds after `kind` returns; wait for Ready
+kubectl wait --for=condition=Ready node --all --timeout=120s
 kubectl get nodes
 ```
 

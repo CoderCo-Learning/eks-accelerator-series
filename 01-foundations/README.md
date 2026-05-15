@@ -172,11 +172,13 @@ The manifests are in [`lab/`](lab). They are intentionally tiny. The point is th
 cd 01-foundations/lab
 kind create cluster --config kind-config.yaml --name eks-accel
 
+# workers take a few seconds after `kind` returns; wait for Ready
+kubectl wait --for=condition=Ready node --all --timeout=120s
 kubectl get nodes
 # NAME                       STATUS   ROLES           AGE   VERSION
-# eks-accel-control-plane    Ready    control-plane
-# eks-accel-worker
-# eks-accel-worker2
+# eks-accel-control-plane    Ready    control-plane    30s   v1.31.0
+# eks-accel-worker           Ready    <none>           15s   v1.31.0
+# eks-accel-worker2          Ready    <none>           15s   v1.31.0
 ```
 
 ### Run through the lab steps

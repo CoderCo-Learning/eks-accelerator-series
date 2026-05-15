@@ -6,16 +6,6 @@ This is what you are building the infrastructure around. Read the Go source, run
 
 > This is a snapshot, not the source of truth. The source of truth lives in `CoderCo-Learning/eks-v2`. Submit against that repo when you grade.
 
-## Contents
-
-```
-platform/
-├── services/             # nine Go services
-├── scripts/              # localstack init script
-├── docker-compose.yml    # postgres, redis, localstack and all nine services
-└── README.md
-```
-
 ## Run locally
 
 ```bash
