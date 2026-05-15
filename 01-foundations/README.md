@@ -110,8 +110,11 @@ docker --version          # 24.x or above
 docker compose version    # v2
 kubectl version --client  # 1.33 or above
 kind --version            # 0.24.x or above
+jq --version              # used to parse JSON in the smoke test
 go version                # 1.26 or above, if you want to run a service outside compose
 ```
+
+> Every command block below assumes you are at the repo root. If you have just finished a section that did `cd somewhere`, `cd` back to the repo root before starting the next one.
 
 ### Run the project locally
 
@@ -239,7 +242,7 @@ If any of those still feel hand wavy, that is the work for this week.
 1. Run the project locally end to end. Place five orders. Read the worker logs
 2. Draw the call graph. Push it as `docs/architecture-v0.png` in your project repo
 3. Read at least three of the Go services in full. Pick `order-service`, `worker` and one of your choice
-4. Finish the kind lab. Delete a `postgres` style pod from the StatefulSet. Confirm the data survives
+4. Finish the kind lab. Delete `data-0` from the StatefulSet. Confirm the file you wrote survives
 5. Write a paragraph in your project README about why this project keeps Postgres in cluster. Use your own words
 
 Bring questions to the next session.
