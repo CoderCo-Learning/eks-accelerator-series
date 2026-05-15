@@ -1,8 +1,8 @@
 # EKS Accelerator Series
 
-This series covers the EKS v2 project end to end. Each session is a single topic deep dive.
+The sequel to the [ECS Accelerator Series](https://github.com/CoderCo-Learning/ecs-accelerator-series). Built to help CoderCo students through the EKS v2 project.
 
-The project you are building is described in [project.md](project.md).
+Each session is a single topic deep dive. The brief for the project is in [project.md](project.md).
 
 ## Sessions
 
