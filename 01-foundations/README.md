@@ -1,10 +1,10 @@
 # Episode 1: Foundations & Local Dev
 
-## Why this episode exists
+## Why this episode
 
-You just shipped ECS. The next jump is not "ECS but with `kubectl`". The actual jump is running stateful workloads on Kubernetes with the operational story around them.
+We just finished the ECS Accelerator Series. The next jump is not "ECS but with `kubectl`". The next part is running the same thing we have done on Kubernetes. Hence, the EKS series. 
 
-This episode is the orientation. Docker compose runs the stack on one host with a hardcoded start order; Kubernetes runs it across a cluster with controllers that reconcile to your desired state.
+This episode is an orientation. 
 
 ## What you walk out with
 
@@ -59,7 +59,7 @@ Kubernetes answers the same question as ECS, with more primitives and more rope.
 | Auto Scaling | HPA (and Karpenter for nodes) | Two scalers. Pods scale on metrics. Nodes scale on pending pods |
 | CloudWatch Logs | Cluster logging stack | Promtail or Fluent Bit shipping to Loki or CloudWatch |
 
-New shapes you did not have in ECS:
+New things you did not have in ECS:
 
 - **Namespace.** A soft tenant boundary. Not a security boundary on its own
 - **StatefulSet.** A Deployment with stable identity and stable storage per pod
@@ -75,7 +75,7 @@ Read those last two more than once. Most of EKS work is configuring controllers.
 
 The project rules say RDS and ElastiCache are off the table. There is a reason.
 
-Most teams put state on managed services because state on Kubernetes is the hard part. You get to do the hard part on purpose. By the end of the project you will know:
+Most teams put state on managed services because state on Kubernetes is the hard part. You get to do the hard part on purpose. We will go through things like in the future:
 
 - Why a StatefulSet keeps `postgres-0` bound to the same PVC forever
 - What happens to a PVC when the pod's AZ goes down
@@ -129,12 +129,12 @@ docker compose up --build
 
 What this brings up:
 
-- All nine services with the deliberately naive `Dockerfile` in each service folder (you replace these in EP2)
+- All nine services with the deliberately naive `Dockerfile` in each service folder. 
 - One Postgres
 - One Redis
 - LocalStack acting as SQS
 
-> The SQS publish path and the worker consume loop are stubs in the upstream `eks-v2` source. You wire them up later in the series. For EP1 we just need the services to start and the synchronous order create to work.
+> The SQS publish path and the worker consume loop are stubs in the upstream `eks-v2` source. We wire them up later in the series. For EP1 we just need the services to start and the synchronous order create to work.
 
 ### Smoke test
 
