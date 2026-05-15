@@ -4,9 +4,7 @@
 
 You just shipped ECS. The next jump is not "ECS but with `kubectl`". The actual jump is running stateful workloads on Kubernetes with the operational story around them.
 
-This episode is the orientation. Read the project brief. Get it running on your laptop with `docker compose`. Drive Kubernetes primitives on a local kind cluster. Then we go to EKS.
-
-If you skip this episode you will spend cluster time debugging the application instead of the cluster. The cluster bill ticks every minute. Save it for the parts that need it.
+This episode is the orientation. Docker compose runs the stack on one host with a hardcoded start order; Kubernetes runs it across a cluster with controllers that reconcile to your desired state.
 
 ## What you walk out with
 
