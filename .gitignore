@@ -1,0 +1,97 @@
+## env
+.env
+.env.*
+!.env.example
+.envrc
+.DS_Store
+
+## terraform
+**.terraform**
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/*.tfplan.*
+**/*.tfstate.backup
+**/*.tfstate.backup.*
+**/*.tfplan.backup
+**/*.tfplan.backup.*
+.terragrunt-cache/
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+## kubernetes
+kubeconfig
+kubeconfig.*
+.kube/
+*.kubeconfig
+
+## helm
+charts/
+**/charts/*.tgz
+
+## kind / local clusters
+.kind/
+local-path-provisioner/
+
+## aws
+.aws/
+aws-exports.js
+*.pem
+
+## secrets
+secrets/
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+## node
+node_modules/
+*.tgz
+.npm
+.yarn/
+.pnp.*
+
+## python
+__pycache__/
+*.py[codz]
+.venv
+venv/
+env/
+.tox/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+## go
+*.test
+*.out
+vendor/
+bin/
+
+## ide
+.vscode/
+.idea/
+*.swp
+
+## build
+dist/
+build/
+target/
+
+## logs
+*.log
+logs/
+npm-debug.log*
+
+## misc
+*.tgz
+*.zip
+*.tar.gz
+package-lock.json
