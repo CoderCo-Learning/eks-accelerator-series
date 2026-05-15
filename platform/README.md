@@ -16,10 +16,11 @@ docker compose up --build
 Smoke test:
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8080/livez     # HTTP 200
+curl http://localhost:8080/healthz   # {"service":"api-gateway","status":"ok"}
 ```
 
-The api-gateway is the public entrypoint. The other services listen on `8081` to `8086`. The worker has no port. The scheduler has no port.
+The api-gateway is the public entrypoint. The other services listen on `8081` to `8086`. The worker and scheduler expose an internal health port (`8090`, `8091`) but compose does not publish those.
 
 ## Services
 

@@ -25,71 +25,18 @@ Full brief: [project.md](../project.md).
 
 ## Prerequisites
 
-Install these before the session. Everything below assumes macOS with Homebrew or a recent Linux. Pick a Docker host first (Docker Desktop, OrbStack, Rancher Desktop or colima), then install the CLI tools.
+You need: Docker (with Compose v2), `kubectl`, `kind`, `jq`, `curl`, and optionally Go 1.26+. No AWS account needed for this episode.
 
-| Tool | Used for | Minimum |
-|---|---|---|
-| Docker | Container runtime for `docker compose` and `kind` | 24.x |
-| Docker Compose v2 | Runs the nine service stack locally | bundled with Docker |
-| kubectl | Talks to the local Kubernetes API | 1.30+ |
-| kind | Local Kubernetes cluster in Docker | 0.24+ |
-| jq | Parses JSON in the smoke test | any |
-| curl | HTTP smoke tests | any |
-| Go (optional) | Run a service outside compose for debugging | 1.26+ |
+macOS: `brew install --cask orbstack && brew install kubectl kind jq go`
 
-> No AWS account needed for this episode. AWS comes in from Episode 3 onwards.
+Linux: see the [kind install docs](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) and use your package manager for the rest.
 
-### Install (macOS)
-
-```bash
-brew install --cask orbstack         # or Docker Desktop / Rancher Desktop
-brew install kubectl kind jq go
-```
-
-### Install (Linux, Debian / Ubuntu)
-
-```bash
-# docker engine + compose plugin
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker "$USER" && newgrp docker
-
-# kubectl
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -m 0755 kubectl /usr/local/bin/kubectl
-
-# kind
-curl -Lo kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
-sudo install -m 0755 kind /usr/local/bin/kind
-
-# jq, curl, go
-sudo apt-get update && sudo apt-get install -y jq curl golang-go
-```
-
-### Verify
-
-```bash
-docker --version
-docker compose version
-kubectl version --client
-kind --version
-jq --version
-go version    # only if you installed go
-```
-
-If any command above fails, fix that before going further. The rest of the episode assumes all of them work.
-
-### Working directory
-
-Every command block below uses paths relative to the repo root. Open one terminal and keep it at the repo root. The flow looks like:
+Then clone the repo and set `REPO_ROOT` so the `cd` lines below resolve:
 
 ```bash
 git clone https://github.com/CoderCo-Learning/eks-accelerator-series.git
-cd eks-accelerator-series
-REPO_ROOT=$(pwd)
-# every later `cd` starts from $REPO_ROOT
+cd eks-accelerator-series && REPO_ROOT=$(pwd)
 ```
-
-If a section says `cd platform`, finish that section, then `cd "$REPO_ROOT"` before starting the next one.
 
 ---
 
@@ -160,7 +107,7 @@ Read the source before the next session. Code is in `services/` in the EKS v2 pr
 Things to look for while reading:
 
 - Where does each service read its config from? (env vars vs files vs Secrets Manager)
-- What port does it expose? Does it expose a `/health` and a `/metrics`?
+- What port does it expose? Does it expose `/healthz`, `/livez` or `/metrics`?
 - Where is the SQS publishing code? Which services emit events?
 - Where does the worker decide an event has failed three times?
 - Which service owns each table? Does anyone read another service's table?
