@@ -110,7 +110,7 @@ docker --version          # 24.x or above
 docker compose version    # v2
 kubectl version --client  # 1.33 or above
 kind --version            # 0.24.x or above
-go version                # 1.22 or above, if you want to run a service outside compose
+go version                # 1.26 or above, if you want to run a service outside compose
 ```
 
 ### Run the project locally
@@ -124,32 +124,41 @@ docker compose up --build
 
 What this brings up:
 
-- All nine services
+- All nine services with the deliberately naive `Dockerfile` in each service folder (you replace these in EP2)
 - One Postgres
 - One Redis
-- LocalStack for SQS (or a stub, check the compose file)
+- LocalStack acting as SQS
+
+> The SQS publish path and the worker consume loop are stubs in the upstream `eks-v2` source. You wire them up later in the series. For EP1 we just need the services to start and the synchronous order create to work.
 
 ### Smoke test
 
 ```bash
-# api-gateway is the public entrypoint
-curl http://localhost:8080/health
-# {"status":"ok"}
+# api-gateway liveness (no auth)
+curl http://localhost:8080/livez                  # HTTP 200, empty body
+curl http://localhost:8080/healthz                # HTTP 200, {"service":"api-gateway","status":"ok"}
 
-# place an order
-curl -X POST http://localhost:8080/orders \
+# register a user and grab the JWT
+TOKEN=$(curl -sS -X POST http://localhost:8080/auth/register \
   -H 'content-type: application/json' \
-  -d '{"sku":"abc-123","qty":1,"customer":"test@example.com"}'
+  -d '{"email":"test@coderco.io","password":"abc123"}' | jq -r .token)
 
-# watch the worker logs in another terminal
-docker compose logs -f worker
+# place an order through the gateway
+curl -sS -X POST http://localhost:8080/api/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"items":[{"product_id":"sku-001","quantity":2,"price":9.99}],"currency":"USD"}'
+# {"id":1,"status":"pending","total":19.98}
+
+# the order-service logs the event it would send
+docker compose logs --tail=20 order-service | grep 'Event -> SQS'
 ```
 
-You should see the order land, inventory reserve, payment process and a shipping record appear. If any of that is broken, fix it locally before going further. Broken locally means broken on EKS, just slower to debug.
+The dashboard UI is at <http://localhost:8086/>. Open it and click around once you have data in the database.
 
 ### Map the call graph
 
-Open the compose logs in nine terminals (or one with `--tail=0 -f`). Place an order. Note the order of log lines across services. That is your call graph. Draw it. Put the sketch in your project README on day one. You will refine it later, but you want a baseline.
+Open the compose logs across services (`docker compose logs --tail=0 -f` in one terminal). Place an order. Note the order of log lines. That is the synchronous call graph. The async paths (SQS, worker fan out) light up later in the series when you replace the stubs.
 
 ---
 

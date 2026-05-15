@@ -1,6 +1,6 @@
 module github.com/CoderCo-Learning/ecs-v3/services/api-gateway
 
-go 1.22
+go 1.26
 
 require (
 	github.com/go-redis/redis/v8 v8.11.5
