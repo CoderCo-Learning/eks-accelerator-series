@@ -6,17 +6,7 @@ No EKS yet. The point is to see the primitives respond before you pay for a clus
 
 ## Prereqs
 
-```bash
-docker --version          # 24.x or above
-kubectl version --client  # 1.33 or above
-kind --version            # 0.24.x or above
-```
-
-Install kind on macOS:
-
-```bash
-brew install kind
-```
+Docker, `kubectl` and `kind` installed. If you have not done this yet, install them from the [Prerequisites](../README.md#prerequisites) section in EP1 first.
 
 ## Create the cluster
 

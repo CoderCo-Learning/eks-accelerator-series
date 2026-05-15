@@ -23,6 +23,76 @@ Full brief: [project.md](../project.md).
 
 ---
 
+## Prerequisites
+
+Install these before the session. Everything below assumes macOS with Homebrew or a recent Linux. Pick a Docker host first (Docker Desktop, OrbStack, Rancher Desktop or colima), then install the CLI tools.
+
+| Tool | Used for | Minimum |
+|---|---|---|
+| Docker | Container runtime for `docker compose` and `kind` | 24.x |
+| Docker Compose v2 | Runs the nine service stack locally | bundled with Docker |
+| kubectl | Talks to the local Kubernetes API | 1.30+ |
+| kind | Local Kubernetes cluster in Docker | 0.24+ |
+| jq | Parses JSON in the smoke test | any |
+| curl | HTTP smoke tests | any |
+| Go (optional) | Run a service outside compose for debugging | 1.26+ |
+
+> No AWS account needed for this episode. AWS comes in from Episode 3 onwards.
+
+### Install (macOS)
+
+```bash
+brew install --cask orbstack         # or Docker Desktop / Rancher Desktop
+brew install kubectl kind jq go
+```
+
+### Install (Linux, Debian / Ubuntu)
+
+```bash
+# docker engine + compose plugin
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER" && newgrp docker
+
+# kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -m 0755 kubectl /usr/local/bin/kubectl
+
+# kind
+curl -Lo kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
+sudo install -m 0755 kind /usr/local/bin/kind
+
+# jq, curl, go
+sudo apt-get update && sudo apt-get install -y jq curl golang-go
+```
+
+### Verify
+
+```bash
+docker --version
+docker compose version
+kubectl version --client
+kind --version
+jq --version
+go version    # only if you installed go
+```
+
+If any command above fails, fix that before going further. The rest of the episode assumes all of them work.
+
+### Working directory
+
+Every command block below uses paths relative to the repo root. Open one terminal and keep it at the repo root. The flow looks like:
+
+```bash
+git clone https://github.com/CoderCo-Learning/eks-accelerator-series.git
+cd eks-accelerator-series
+REPO_ROOT=$(pwd)
+# every later `cd` starts from $REPO_ROOT
+```
+
+If a section says `cd platform`, finish that section, then `cd "$REPO_ROOT"` before starting the next one.
+
+---
+
 ## 1. Where Kubernetes fits
 
 You already know:
@@ -101,27 +171,14 @@ That last question is the one that determines how you handle migrations later.
 
 ## 4. Local dev
 
-Run the platform on your laptop before touching AWS.
-
-### Prerequisites
-
-```bash
-docker --version          # 24.x or above
-docker compose version    # v2
-kubectl version --client  # 1.33 or above
-kind --version            # 0.24.x or above
-jq --version              # used to parse JSON in the smoke test
-go version                # 1.26 or above, if you want to run a service outside compose
-```
-
-> Every command block below assumes you are at the repo root. If you have just finished a section that did `cd somewhere`, `cd` back to the repo root before starting the next one.
+Run the platform on your laptop before touching AWS. If you haven't installed the tools yet, jump back to [Prerequisites](#prerequisites).
 
 ### Run the project locally
 
 A snapshot of the application code lives in [`platform/`](../platform/README.md) at the root of this repo.
 
 ```bash
-cd platform
+cd "$REPO_ROOT/platform"
 docker compose up --build
 ```
 
@@ -172,7 +229,7 @@ Goal: see Pod, Deployment, Service and StatefulSet behave with your own eyes on 
 The manifests are in [`lab/`](lab). They are intentionally tiny. The point is the behaviour, not the YAML.
 
 ```bash
-cd 01-foundations/lab
+cd "$REPO_ROOT/01-foundations/lab"
 kind create cluster --config kind-config.yaml --name eks-accel
 
 # workers take a few seconds after `kind` returns; wait for Ready
