@@ -115,8 +115,10 @@ go version                # 1.22 or above, if you want to run a service outside 
 
 ### Run the project locally
 
+A snapshot of the application code lives in [`platform/`](../platform/README.md) at the root of this repo.
+
 ```bash
-# in the EKS v2 project repo, not this one
+cd platform
 docker compose up --build
 ```
 
@@ -227,12 +229,4 @@ If any of those still feel hand wavy, that is the work for this week.
 4. Finish the kind lab. Delete a `postgres` style pod from the StatefulSet. Confirm the data survives
 5. Write a paragraph in your project README about why this project keeps Postgres in cluster. Use your own words
 
-Bring questions to the next session. Episode 2 is containerisation. We write nine Dockerfiles, stand up ECR in Terraform, wire image scanning into the build before anything reaches a cluster.
-
----
-
-## What's next
-
-[EP 2: Containerisation & ECR](../02-containerisation-ecr/README.md)
-
-Multi stage Dockerfiles for Go services. One ECR repo per service in Terraform. Tagging by commit SHA. Scanning images before they ever reach a cluster.
+Bring questions to the next session.

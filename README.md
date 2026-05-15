@@ -8,6 +8,10 @@ Each session is a single topic deep dive. The brief for the project is in [proje
 
 - [EP 1: Foundations & Local Dev](01-foundations/README.md)
 
+## Platform snapshot
+
+A snapshot of the EKS v2 application code lives in [`platform/`](platform/README.md) so the series is self contained. Run it locally with `docker compose` before showing up to a session. The upstream source of truth is [CoderCo-Learning/eks-v2](https://github.com/CoderCo-Learning/eks-v2).
+
 ## How to use this repo
 
 Each session has its own folder. The folder contains:

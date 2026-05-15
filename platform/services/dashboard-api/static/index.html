@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Platform</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e1e4e8; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { font-size: 1.5rem; margin-bottom: 24px; color: #fff; }
+        h2 { font-size: 1.1rem; margin-bottom: 12px; color: #8b949e; font-weight: 500; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; }
+        .card-label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; }
+        .card-value { font-size: 2rem; font-weight: 600; margin-top: 4px; }
+        .card-value.green { color: #3fb950; }
+        .card-value.blue { color: #58a6ff; }
+        .card-value.orange { color: #d29922; }
+        .card-value.red { color: #f85149; }
+
+        .section { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 8px 12px; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; border-bottom: 1px solid #30363d; }
+        td { padding: 10px 12px; border-bottom: 1px solid #21262d; font-size: 0.9rem; }
+        tr:hover { background: #1c2128; }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+        .badge-pending { background: #d29922; color: #0f1117; }
+        .badge-confirmed { background: #58a6ff; color: #0f1117; }
+        .badge-processing { background: #bc8cff; color: #0f1117; }
+        .badge-shipped { background: #3fb950; color: #0f1117; }
+        .badge-delivered { background: #238636; color: #fff; }
+        .badge-cancelled { background: #f85149; color: #fff; }
+
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+        .btn-primary { background: #238636; color: #fff; }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+        .btn-blue { background: #1f6feb; color: #fff; }
+        .btn-orange { background: #9e6a03; color: #fff; }
+
+        .form-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .form-row input, .form-row select { padding: 8px 12px; border: 1px solid #30363d; border-radius: 6px; background: #0d1117; color: #e1e4e8; font-size: 0.85rem; }
+        .form-row input { flex: 1; min-width: 120px; }
+
+        .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
+        .tab { padding: 8px 16px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.85rem; color: #8b949e; }
+        .tab.active { color: #fff; border-bottom: 2px solid #58a6ff; }
+        .tab:hover { color: #e1e4e8; }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+        .service-card { padding: 12px; border-radius: 6px; border: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+        .service-name { font-size: 0.85rem; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot-green { background: #3fb950; }
+        .dot-red { background: #f85149; }
+        .dot-grey { background: #484f58; }
+
+        .refresh { float: right; font-size: 0.8rem; color: #8b949e; cursor: pointer; }
+        .refresh:hover { color: #e1e4e8; }
+
+        #toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 6px; background: #238636; color: #fff; font-size: 0.85rem; display: none; z-index: 100; }
+        #toast.error { background: #f85149; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Order Fulfillment Platform <span class="refresh" onclick="refreshAll()">refresh</span></h1>
+
+        <div class="grid" id="stats"></div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('orders')">Orders</div>
+            <div class="tab" onclick="showTab('inventory')">Inventory</div>
+            <div class="tab" onclick="showTab('payments')">Payments</div>
+            <div class="tab" onclick="showTab('shipping')">Shipping</div>
+            <div class="tab" onclick="showTab('notifications')">Notifications</div>
+            <div class="tab" onclick="showTab('services')">Services</div>
+        </div>
+
+        <!-- Orders -->
+        <div class="panel active" id="panel-orders">
+            <div class="section">
+                <h2>Create Order</h2>
+                <div class="form-row">
+                    <input type="text" id="order-product" placeholder="Product ID (e.g. kb-001)">
+                    <input type="number" id="order-qty" placeholder="Qty" value="1" min="1" style="max-width:80px">
+                    <input type="number" id="order-price" placeholder="Price" step="0.01" style="max-width:100px">
+                    <button class="btn btn-primary" onclick="createOrder()">Place Order</button>
+                </div>
+            </div>
+            <div class="section">
+                <h2>Orders</h2>
+                <table>
+                    <thead><tr><th>ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+                    <tbody id="orders-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Inventory -->
+        <div class="panel" id="panel-inventory">
+            <div class="section">
+                <h2>Add Product</h2>
+                <div class="form-row">
+                    <input type="text" id="prod-id" placeholder="Product ID">
+                    <input type="text" id="prod-name" placeholder="Name">
+                    <input type="text" id="prod-sku" placeholder="SKU">
+                    <input type="number" id="prod-price" placeholder="Price" step="0.01" style="max-width:100px">
+                    <input type="number" id="prod-stock" placeholder="Stock" style="max-width:80px">
+                    <button class="btn btn-primary" onclick="addProduct()">Add</button>
+                </div>
+            </div>
+            <div class="section">
+                <h2>Products</h2>
+                <table>
+                    <thead><tr><th>ID</th><th>Name</th><th>SKU</th><th>Price</th><th>Stock</th><th>Reserved</th><th>Available</th></tr></thead>
+                    <tbody id="inventory-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Payments -->
+        <div class="panel" id="panel-payments">
+            <div class="section">
+                <h2>Revenue</h2>
+                <div id="revenue-info"></div>
+            </div>
+            <div class="section">
+                <h2>Ledger</h2>
+                <table>
+                    <thead><tr><th>Payment</th><th>Type</th><th>Debit</th><th>Credit</th><th>Description</th><th>Date</th></tr></thead>
+                    <tbody id="ledger-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Shipping -->
+        <div class="panel" id="panel-shipping">
+            <div class="section">
+                <h2>Shipments</h2>
+                <table>
+                    <thead><tr><th>ID</th><th>Order</th><th>Carrier</th><th>Tracking</th><th>Status</th><th>Recipient</th></tr></thead>
+                    <tbody id="shipping-table"></tbody>
+                </table>
+            </div>
+            <div class="section">
+                <h2>Overview</h2>
+                <div id="shipping-overview"></div>
+            </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="panel" id="panel-notifications">
+            <div class="section">
+                <h2>Recent Notifications</h2>
+                <table>
+                    <thead><tr><th>ID</th><th>Recipient</th><th>Channel</th><th>Template</th><th>Status</th><th>Sent</th></tr></thead>
+                    <tbody id="notif-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Services -->
+        <div class="panel" id="panel-services">
+            <div class="section">
+                <h2>Service Health</h2>
+                <div class="services-grid" id="services-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = window.location.origin;
+        let token = localStorage.getItem('token') || '';
+
+        // Auto-login on load
+        if (!token) {
+            fetch(API + '/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: 'admin@platform.local', password: 'admin' })
+            })
+            .then(r => r.json())
+            .then(d => { token = d.token; localStorage.setItem('token', token); })
+            .catch(() => {});
+        }
+
+        function headers() {
+            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+        }
+
+        function toast(msg, error) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = error ? 'error' : '';
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('panel-' + name).classList.add('active');
+            refreshAll();
+        }
+
+        function badge(status) {
+            return `<span class="badge badge-${status}">${status}</span>`;
+        }
+
+        function ts(s) {
+            if (!s) return '-';
+            return new Date(s).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function money(n) { return '£' + Number(n || 0).toFixed(2); }
+
+        // --- Stats ---
+        async function loadStats() {
+            try {
+                const r = await fetch(API + '/dashboard/summary');
+                const d = await r.json();
+                document.getElementById('stats').innerHTML = `
+                    <div class="card"><div class="card-label">Total Orders</div><div class="card-value blue">${d.orders?.total || 0}</div></div>
+                    <div class="card"><div class="card-label">Today's Orders</div><div class="card-value green">${d.orders?.today || 0}</div></div>
+                    <div class="card"><div class="card-label">Revenue</div><div class="card-value green">${money(d.revenue?.total)}</div></div>
+                    <div class="card"><div class="card-label">Low Stock Alerts</div><div class="card-value ${d.inventory?.low_stock > 0 ? 'red' : 'green'}">${d.inventory?.low_stock || 0}</div></div>
+                    <div class="card"><div class="card-label">Active Shipments</div><div class="card-value orange">${d.shipping?.active_shipments || 0}</div></div>
+                `;
+            } catch(e) { console.error('Stats error', e); }
+        }
+
+        // --- Orders ---
+        async function loadOrders() {
+            try {
+                const r = await fetch(API + '/api/orders/', { headers: headers() });
+                const orders = await r.json();
+                const tbody = document.getElementById('orders-table');
+                if (!orders || !orders.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#8b949e">No orders yet</td></tr>'; return; }
+                tbody.innerHTML = orders.map(o => {
+                    const items = (typeof o.items === 'string' ? JSON.parse(o.items) : o.items) || [];
+                    const itemStr = items.map(i => `${i.product_id} x${i.quantity}`).join(', ');
+                    let actions = '';
+                    const next = { pending: 'confirmed', confirmed: 'processing', processing: 'shipped', shipped: 'delivered' };
+                    if (next[o.status]) {
+                        actions = `<button class="btn btn-sm btn-blue" onclick="advanceOrder(${o.id},'${next[o.status]}')">${next[o.status]}</button>`;
+                    }
+                    if (['pending','confirmed','processing'].includes(o.status)) {
+                        actions += ` <button class="btn btn-sm btn-orange" onclick="advanceOrder(${o.id},'cancelled')">cancel</button>`;
+                    }
+                    return `<tr><td>${o.id}</td><td>${o.customer_id}</td><td>${itemStr}</td><td>${money(o.total)}</td><td>${badge(o.status)}</td><td>${ts(o.created_at)}</td><td>${actions}</td></tr>`;
+                }).join('');
+            } catch(e) { console.error('Orders error', e); }
+        }
+
+        async function createOrder() {
+            const product = document.getElementById('order-product').value;
+            const qty = parseInt(document.getElementById('order-qty').value) || 1;
+            const price = parseFloat(document.getElementById('order-price').value) || 0;
+            if (!product || !price) { toast('Fill in product, qty and price', true); return; }
+
+            try {
+                const r = await fetch(API + '/api/orders/', {
+                    method: 'POST', headers: headers(),
+                    body: JSON.stringify({ items: [{ product_id: product, quantity: qty, price: price }] })
+                });
+                const d = await r.json();
+                if (r.ok) { toast('Order #' + d.id + ' created'); refreshAll(); }
+                else { toast(d.error || 'Failed', true); }
+            } catch(e) { toast('Error creating order', true); }
+        }
+
+        async function advanceOrder(id, status) {
+            try {
+                const r = await fetch(API + '/api/orders/status', {
+                    method: 'PUT', headers: headers(),
+                    body: JSON.stringify({ order_id: id, new_status: status })
+                });
+                if (r.ok) { toast(`Order #${id} -> ${status}`); refreshAll(); }
+                else { const d = await r.json(); toast(d.error || 'Failed', true); }
+            } catch(e) { toast('Error updating order', true); }
+        }
+
+        // --- Inventory ---
+        async function loadInventory() {
+            try {
+                const r = await fetch(API + '/api/inventory/products', { headers: headers() });
+                const products = await r.json();
+                const tbody = document.getElementById('inventory-table');
+                if (!products || !products.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#8b949e">No products yet</td></tr>'; return; }
+                tbody.innerHTML = products.map(p => {
+                    const avail = p.available ?? (p.stock - p.reserved);
+                    const color = avail < 10 ? 'color:#f85149' : '';
+                    return `<tr><td>${p.id}</td><td>${p.name}</td><td>${p.sku}</td><td>${money(p.price)}</td><td>${p.stock}</td><td>${p.reserved}</td><td style="${color}">${avail}</td></tr>`;
+                }).join('');
+            } catch(e) { console.error('Inventory error', e); }
+        }
+
+        async function addProduct() {
+            const data = {
+                id: document.getElementById('prod-id').value,
+                name: document.getElementById('prod-name').value,
+                sku: document.getElementById('prod-sku').value,
+                price: parseFloat(document.getElementById('prod-price').value) || 0,
+                stock: parseInt(document.getElementById('prod-stock').value) || 0
+            };
+            if (!data.id || !data.name) { toast('Fill in product details', true); return; }
+            try {
+                const r = await fetch(API + '/api/inventory/products', {
+                    method: 'POST', headers: headers(),
+                    body: JSON.stringify(data)
+                });
+                if (r.ok) { toast('Product added'); refreshAll(); }
+                else { const d = await r.json(); toast(d.error || 'Failed', true); }
+            } catch(e) { toast('Error adding product', true); }
+        }
+
+        // --- Payments ---
+        async function loadPayments() {
+            try {
+                const r = await fetch(API + '/dashboard/revenue');
+                const d = await r.json();
+                document.getElementById('revenue-info').innerHTML = `
+                    <div class="grid">
+                        <div class="card"><div class="card-label">Total Revenue</div><div class="card-value green">${money(d.total)}</div></div>
+                        <div class="card"><div class="card-label">Refunded</div><div class="card-value red">${money(d.refunded)}</div></div>
+                        <div class="card"><div class="card-label">Net</div><div class="card-value blue">${money(d.net)}</div></div>
+                    </div>
+                `;
+            } catch(e) {}
+
+            try {
+                const r = await fetch(API + '/api/payments/ledger', { headers: headers() });
+                const entries = await r.json();
+                const tbody = document.getElementById('ledger-table');
+                if (!entries || !entries.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:#8b949e">No entries</td></tr>'; return; }
+                tbody.innerHTML = entries.map(e => 
+                    `<tr><td style="font-size:0.75rem">${e.payment_id}</td><td>${badge(e.entry_type)}</td><td>${e.debit > 0 ? money(e.debit) : '-'}</td><td>${e.credit > 0 ? money(e.credit) : '-'}</td><td>${e.description}</td><td>${ts(e.created_at)}</td></tr>`
+                ).join('');
+            } catch(e) {}
+        }
+
+        // --- Shipping ---
+        async function loadShipping() {
+            try {
+                const r = await fetch(API + '/api/shipping/shipments', { headers: headers() });
+                const shipments = await r.json();
+                const tbody = document.getElementById('shipping-table');
+                if (!shipments || !shipments.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:#8b949e">No shipments</td></tr>'; return; }
+                tbody.innerHTML = shipments.map(s =>
+                    `<tr><td>${s.id}</td><td>${s.order_id}</td><td>${s.carrier}</td><td>${s.tracking_number || '-'}</td><td>${badge(s.status)}</td><td>${s.recipient_name}</td></tr>`
+                ).join('');
+            } catch(e) {}
+
+            try {
+                const r = await fetch(API + '/dashboard/shipping/overview');
+                const d = await r.json();
+                const statuses = Object.entries(d.by_status || {}).map(([k,v]) => `${badge(k)} ${v}`).join('&nbsp;&nbsp;');
+                const carriers = Object.entries(d.by_carrier || {}).map(([k,v]) => `${k}: ${v}`).join(', ');
+                document.getElementById('shipping-overview').innerHTML = `
+                    <p style="margin-bottom:8px">${statuses || 'No shipments'}</p>
+                    <p style="color:#8b949e;font-size:0.85rem">Carriers: ${carriers || '-'} | Avg delivery: ${(d.avg_delivery_hours || 0).toFixed(1)}h</p>
+                `;
+            } catch(e) {}
+        }
+
+        // --- Notifications ---
+        async function loadNotifications() {
+            try {
+                const r = await fetch(API + '/api/notifications/history', { headers: headers() });
+                const notifs = await r.json();
+                const tbody = document.getElementById('notif-table');
+                if (!notifs || !notifs.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:#8b949e">No notifications</td></tr>'; return; }
+                tbody.innerHTML = notifs.map(n =>
+                    `<tr><td>${n.id}</td><td>${n.recipient}</td><td>${n.channel}</td><td>${n.template}</td><td>${badge(n.status)}</td><td>${ts(n.sent_at || n.created_at)}</td></tr>`
+                ).join('');
+            } catch(e) {}
+        }
+
+        // --- Services ---
+        async function loadServices() {
+            const services = [
+                { name: 'api-gateway', url: '/healthz' },
+                { name: 'order-service', url: '/api/orders/healthz' },
+                { name: 'inventory-service', url: '/api/inventory/healthz' },
+                { name: 'payment-service', url: '/api/payments/healthz' },
+                { name: 'notification-service', url: '/api/notifications/healthz' },
+                { name: 'shipping-service', url: '/api/shipping/healthz' },
+                { name: 'dashboard-api', url: '/dashboard/healthz' },
+            ];
+
+            const grid = document.getElementById('services-grid');
+            grid.innerHTML = services.map(s => 
+                `<div class="service-card" id="svc-${s.name}"><span class="service-name">${s.name}</span><span class="dot dot-grey"></span></div>`
+            ).join('');
+
+            for (const s of services) {
+                try {
+                    const r = await fetch(API + s.url, { signal: AbortSignal.timeout(3000) });
+                    const d = await r.json();
+                    const el = document.getElementById('svc-' + s.name);
+                    const dot = el.querySelector('.dot');
+                    dot.className = d.status === 'ok' ? 'dot dot-green' : 'dot dot-red';
+                } catch(e) {
+                    const el = document.getElementById('svc-' + s.name);
+                    if (el) el.querySelector('.dot').className = 'dot dot-red';
+                }
+            }
+        }
+
+        // --- Refresh ---
+        function refreshAll() {
+            loadStats();
+            loadOrders();
+            loadInventory();
+            loadPayments();
+            loadShipping();
+            loadNotifications();
+            loadServices();
+        }
+
+        // Auto-refresh every 10s
+        refreshAll();
+        setInterval(refreshAll, 10000);
+    </script>
+</body>
+</html>
