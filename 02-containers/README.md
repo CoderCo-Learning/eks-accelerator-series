@@ -30,7 +30,7 @@ A **monolith** is one binary that does everything. It handles HTTP requests, pro
 
 A **microservices** setup splits that up. Each service does one job. Orders live in one service. Payments live in another. Notifications live in a third. They are independent processes that talk to each other over the network.
 
-This platform has nine of them. Here is why that matters, and what it costs us.
+This platform has nine of them. Here is why that matters and what it costs us.
 
 ### What we get by splitting it up
 
@@ -283,13 +283,13 @@ Now the tour. Each service gets a few minutes. Same shape every time so the patt
 var staticFiles embed.FS
 ```
 
-`//go:embed` is a Go directive that bakes the entire `static/` folder (HTML, CSS, JavaScript) into the compiled binary at build time. So even though the Dockerfile looks the same as every other service, this binary is the only one that contains a UI inside it. We do not need a separate `COPY static ./static` in the Dockerfile. Go does it at compile time, and the binary serves the files from memory.
+`//go:embed` is a Go directive that bakes the entire `static/` folder (HTML, CSS, JavaScript) into the compiled binary at build time. So even though the Dockerfile looks the same as every other service, this binary is the only one that contains a UI inside it. We do not need a separate `COPY static ./static` in the Dockerfile. Go does it at compile time and the binary serves the files from memory.
 
 This is a small but important point: **a template Dockerfile works here because the language handles the variation for us**. If the UI were a separate `dist/` folder served by a Node process, the Dockerfile would need its own runtime stage with the static files copied across. Because it is Go with `embed`, it does not.
 
 **What bites in EKS.**
 - The UI being baked into the binary means we can rebuild and roll the dashboard with the same pattern as every other service: build new image, tag with the git SHA, update the manifest. No separate frontend artefact, no CDN to invalidate
-- This is the **third Pod that needs public reach**. Engineers and ops land on it through Ingress. The hostname is different from the customer-facing api-gateway (probably `admin.<domain>` rather than `app.<domain>`), and the auth is tighter
+- This is the **third Pod that needs public reach**. Engineers and ops land on it through Ingress. The hostname is different from the customer-facing api-gateway (probably `admin.<domain>` rather than `app.<domain>`). The auth on it is also tighter
 - This service is read-heavy, with bigger queries than anything else (joins across orders, payments and shipments). The connection pool is `SetMaxOpenConns(10)`. We will tell a cautionary tale later: a 30-second Postgres query triggered by a Grafana panel that brought the cluster's data layer down. This service is the example.
 
 ---
@@ -327,7 +327,7 @@ If anyone forgets the patterns later in the series, come back to these three gro
 ## Homework
 
 1. Open each `main.go` in `platform/services/`. For each one, write down the list of environment variables it reads. There should be between 2 and 8 per service
-2. For each service, write a single line: "this becomes a `Deployment` / `StatefulSet` / `CronJob`". Defend the answer for the scheduler and the worker out loud to someone, or write it in your project README
+2. For each service, write a single line: "this becomes a `Deployment` / `StatefulSet` / `CronJob`". Defend the answer for the scheduler and the worker out loud to someone. Writing it in your project README works too
 3. Run `docker compose up --build` from `platform/` if you have not lately. Place an order. Watch the worker logs catch the event. The async path you see in compose is the same async path we light up later with real SQS instead of LocalStack
 4. Pick one service you do not understand yet. Read it in full. Bring one question about it to next week
 
