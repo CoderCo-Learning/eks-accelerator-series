@@ -11,7 +11,7 @@ We are not rewriting any Dockerfile today. Every service ships with one already.
 - What is in its Dockerfile and where it differs from the rest
 - The one or two things in that Dockerfile that bite us when we move to EKS
 
-By the end you should be able to point at any of the nine services and say "this one becomes a Deployment, this one a StatefulSet client, this one wants IRSA for SQS, this one is the only Pod that needs Ingress". Most of those words are explained in the vocab section below. Stick with us.
+By the end you should be able to point at any of the nine services and say "this one becomes a Deployment, this one a StatefulSet client, this one wants IRSA for SQS, this one is the only Pod that needs Ingress". Most of those words are explained in Appendix A at the bottom. Stick with us.
 
 ---
 
@@ -333,7 +333,7 @@ This is a small but important point: **a template Dockerfile works here because 
 **What bites in EKS.**
 - The UI being baked into the binary means we can rebuild and roll the dashboard with the same pattern as every other service: build new image, tag with the git SHA, update the manifest. No separate frontend artefact, no CDN to invalidate
 - This is the **third Pod that needs public reach**. Engineers and ops land on it through Ingress. The hostname is different from the customer-facing api-gateway (probably `admin.<domain>` rather than `app.<domain>`). The auth on it is also tighter
-- This service is read-heavy, with bigger queries than anything else (joins across orders, payments and shipments). The connection pool is `SetMaxOpenConns(10)`. We will tell a cautionary tale later: a 30-second Postgres query triggered by a Grafana panel that brought the cluster's data layer down. This service is the example.
+- This service is read-heavy, with bigger queries than anything else (joins across four or five tables at a time). The connection pool is `SetMaxOpenConns(10)`. We will tell a cautionary tale later: a 30-second Postgres query triggered by a Grafana panel that brought the cluster's data layer down. This service is the example.
 
 ---
 

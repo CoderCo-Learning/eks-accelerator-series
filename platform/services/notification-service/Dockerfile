@@ -1,4 +1,4 @@
-# Lab quality Dockerfile. You will rewrite this in EP2 (multi stage, distroless, non root, .dockerignore, scanned).
+# Lab grade. We harden this later in the series.
 FROM golang:1.26-alpine
 WORKDIR /app
 COPY . .
