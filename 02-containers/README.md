@@ -1,6 +1,6 @@
 # Episode 2: The nine services and their containers
 
-## Why this episode
+## Need for this episode
 
 This is EP2. We tour the nine Go services that make up the platform. For each one we look at what it does, what it talks to and what is in its Dockerfile. The point is to know what we are about to put on EKS before we start putting it there.
 
