@@ -13,15 +13,6 @@ We are not rewriting any Dockerfile today. Every service ships with one already.
 
 By the end you should be able to point at any of the nine services and say "this one becomes a Deployment, this one a StatefulSet client, this one wants IRSA for SQS, this one is the only Pod that needs Ingress". Most of those words are explained in the vocab section below. Stick with us.
 
-## How this session runs (45 min)
-
-| Block | Mins | What we do |
-|---|---|---|
-| 0 | 8 | Monolith vs microservices, why we have nine of them |
-| 1 | 4 | Quick vocab + what every service has in common |
-| 2 | 27 | Walk the nine services, ~3 min each |
-| 3 | 6 | What we just saw, homework |
-
 ---
 
 ## Monolith vs microservices: why we have nine of these
@@ -98,7 +89,6 @@ You will hear these words a lot. Skip if you already know them.
 Every service in `platform/services/` ships an identical Dockerfile:
 
 ```dockerfile
-# Lab quality Dockerfile. You will rewrite this in EP2 (multi stage, distroless, non root, .dockerignore, scanned).
 FROM golang:1.26-alpine
 WORKDIR /app
 COPY . .
@@ -107,7 +97,7 @@ RUN go build -o /app/service .
 CMD ["/app/service"]
 ```
 
-It works. It is also lab grade. The comment says so. We will harden it later in the series when we add things like probes (Kubernetes' way of checking a Pod is alive and ready), resource limits and a `securityContext` (rules about what user the container runs as). For today we leave it alone and focus on what is inside the binary, because that is the bit each service does differently.
+We will harden it later in the series when we add things like probes (Kubernetes' way of checking a Pod is alive and ready), resource limits and a `securityContext` (rules about what user the container runs as). For today we leave it alone and focus on what is inside the binary, because that is the bit each service does differently.
 
 The four things every service has in common at runtime:
 
@@ -327,16 +317,8 @@ If anyone forgets the patterns later in the series, come back to these three gro
 ## Homework
 
 1. Open each `main.go` in `platform/services/`. For each one, write down the list of environment variables it reads. There should be between 2 and 8 per service
-2. For each service, write a single line: "this becomes a `Deployment` / `StatefulSet` / `CronJob`". Defend the answer for the scheduler and the worker out loud to someone. Writing it in your project README works too
-3. Run `docker compose up --build` from `platform/` if you have not lately. Place an order. Watch the worker logs catch the event. The async path you see in compose is the same async path we light up later with real SQS instead of LocalStack
-4. Pick one service you do not understand yet. Read it in full. Bring one question about it to next week
+2. Run `docker compose up --build` from `platform/` if you have not lately. Place an order. Watch the worker logs catch the event. The async path you see in compose is the same async path we light up later with real SQS instead of LocalStack
 
 ---
 
-## What we are not doing today
-
-- Rewriting any Dockerfile. The current ones are intentionally rough. We tighten them later when we know what the cluster wants from them
-- Building images for ECR (Elastic Container Registry, the AWS image store). ECR comes later when CI/CD is wired in
-- Talking about probes, resource limits or IRSA in any depth. Each one gets its own focus later
-
-If you find yourself wanting to do any of those today, hold the thought. Write it down. We will get there.
+See you in episode 3!
