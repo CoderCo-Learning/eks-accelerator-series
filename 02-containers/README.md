@@ -101,6 +101,20 @@ flowchart LR
     worker --> ship
 ```
 
+**A single order from start to finish.** Reading the diagram above, here is what actually happens when one customer places one order:
+
+1. Customer sends `POST /api/orders` to api-gateway with a JWT in the header
+2. api-gateway verifies the JWT and applies the Redis rate limit, then proxies the request to order-service
+3. order-service writes a `pending` row to the `orders` table in Postgres and publishes an `order.created` event to SQS. It returns `201 Created` to the customer straight away. As far as the customer is concerned, the order is placed
+4. Meanwhile, worker is long-polling SQS in the background. It picks up the `order.created` event a moment later
+5. worker fans the event out over HTTP: it calls inventory-service to reserve stock, payment-service to charge, notification-service to email the customer and shipping-service to create a shipment label
+6. Each of those services updates its own tables in Postgres. Some of them publish their own follow-up events back to SQS (`payment.processed`, `shipment.created`)
+7. worker picks those follow-up events up too and updates the order via order-service, marching it through pending → confirmed → processing → shipped → delivered
+8. Separately, scheduler runs on tickers in the background: expiring abandoned reservations every minute, retrying failed payments every 15 minutes, sending daily digests every hour and cleaning up old events every 30 minutes
+9. dashboard-api reads from Postgres on demand to render summaries for the admin UI
+
+That is the whole platform doing one transaction. Every box in the diagram has a part to play.
+
 Three patterns to take from that picture. You can see all three in the compose file too.
 
 **Synchronous HTTP.** One service calls another over HTTP and waits for the answer. The api-gateway calls order-service to create an order. order-service calls inventory-service to check stock. These are blocking calls. If the callee is slow, the caller is slow. If the callee is down, the caller has to handle that gracefully.
