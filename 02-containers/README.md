@@ -43,7 +43,65 @@ This platform has nine of them. Here is why that matters and what it costs us.
 
 ### How our nine services actually talk to each other
 
-Three patterns. You can see all three already in the compose file.
+The whole platform on one page. Solid arrows are synchronous HTTP. Dotted arrows are asynchronous SQS events.
+
+```mermaid
+flowchart LR
+    customer([Customer])
+    admin([Admin / Ops])
+    carrier([Carrier])
+
+    subgraph services [Application services]
+        gw[api-gateway]
+        order[order-service]
+        inv[inventory-service]
+        pay[payment-service]
+        notif[notification-service]
+        ship[shipping-service]
+        dash[dashboard-api]
+        worker[worker]
+        sched[scheduler]
+    end
+
+    subgraph infra [Infra]
+        pg[(Postgres)]
+        redis[(Redis)]
+        sqs[(SQS)]
+    end
+
+    customer --> gw
+    admin --> dash
+    carrier --> ship
+
+    gw --> order
+    gw --> inv
+    gw --> pay
+    gw --> notif
+    gw --> ship
+    gw --> dash
+    gw --> redis
+
+    order --> pg
+    inv --> pg
+    pay --> pg
+    notif --> pg
+    ship --> pg
+    dash --> pg
+    sched --> pg
+
+    order -. event .-> sqs
+    pay -. event .-> sqs
+    ship -. event .-> sqs
+    sqs -. consume .-> worker
+
+    worker --> order
+    worker --> inv
+    worker --> pay
+    worker --> notif
+    worker --> ship
+```
+
+Three patterns to take from that picture. You can see all three in the compose file too.
 
 **Synchronous HTTP.** One service calls another over HTTP and waits for the answer. The api-gateway calls order-service to create an order. order-service calls inventory-service to check stock. These are blocking calls. If the callee is slow, the caller is slow. If the callee is down, the caller has to handle that gracefully.
 
