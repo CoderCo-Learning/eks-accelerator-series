@@ -1,51 +1,32 @@
-# Episode 2: Containers (the bit before EKS)
+# Episode 2: The nine services and their containers
 
 ## Why this episode
 
-Last week we ran the platform on `docker compose`. The Dockerfiles were honest about being lab grade — the comment in each one literally says "you will rewrite this in EP2".
+EP1 was about running the platform. EP3 onwards is about putting it on EKS. EP2 sits in the middle — a tour of the nine services so we know what each one is before we hand it to a cluster.
 
-Today is EP2. We rewrite them.
+We are not rewriting any Dockerfile today. Every service ships with one already. They are deliberately rough so we can poke at them. What we want is a clear picture of:
 
-This is the last episode before AWS shows up. Once we cross into session 3 we are talking VPCs, subnets, EKS control planes. The images we ship to that cluster need to behave. Today we make sure they do.
+- What each service does in one sentence
+- What it talks to (Postgres, Redis, SQS, other services)
+- What is in its Dockerfile and where it differs from the rest
+- The one or two things in that Dockerfile that bite us later in the series
 
-## What we walk out with
-
-- A multi-stage Dockerfile we wrote line by line, not copy pasted
-- A working `.dockerignore` so we stop shipping `.git` to production
-- One service rebuilt the right way live in the session
-- A clear hand off to next week: this image becomes a Pod, the SHA we tag becomes the rollback button
+By the end you should be able to point at any of the nine services and say "this one becomes a Deployment, this one a StatefulSet client, this one wants IRSA for SQS, this one is the only Pod that needs Ingress". That sentence is what session 3 builds the network for.
 
 ## How this session runs (45 min)
 
 | Block | Mins | What we do |
 |---|---|---|
-| 0 | 2 | Recap of EP1, where this fits |
-| 1 | 5 | Read the naive Dockerfile we already have |
-| 2 | 5 | Build it. Measure it. Find the smell |
-| 3 | 5 | Fix the cache. Rebuild |
-| 4 | 12 | Multi-stage + distroless + non-root |
-| 5 | 3 | `.dockerignore` |
-| 6 | 5 | The other eight services. Templates not clones |
-| 7 | 5 | Tag by SHA. Why `:latest` is a footgun in EKS |
-| 8 | 3 | Where this lands next week |
-
-Total 45. We will run over by 5. Plan for it.
+| 0 | 3 | Why a tour, what every service has in common |
+| 1 | 27 | Walk the nine services, ~3 min each |
+| 2 | 10 | What we just saw. The service-to-session map |
+| 3 | 5 | Homework, what next week looks like |
 
 ---
 
-## 0. Recap
+## 0. The baseline they all share
 
-Last week we ran the order flow on a laptop. We brought up Postgres, Redis, LocalStack and nine Go services with `docker compose up --build`. The Dockerfiles built every time. They were also wrong in five different ways.
-
-Today we fix that. Same code. Same compose file. Different Dockerfile.
-
-> If you have not run EP1 end to end, do that first. The smoke test in [01-foundations/README.md](../01-foundations/README.md#smoke-test) is the bar. We will assume orders are placing locally.
-
----
-
-## 1. Read the Dockerfile we already have
-
-Open `platform/services/order-service/Dockerfile` in your editor. All nine services have an identical one. Here it is:
+Every service in `platform/services/` ships an identical Dockerfile:
 
 ```dockerfile
 # Lab quality Dockerfile. You will rewrite this in EP2 (multi stage, distroless, non root, .dockerignore, scanned).
@@ -57,315 +38,256 @@ RUN go build -o /app/service .
 CMD ["/app/service"]
 ```
 
-It works. We saw it work last week. Five orders went through this image. So what is wrong with it?
+It works. It is also lab grade — the comment says so. We tighten it in session 9 when we add probes, resource limits and a proper `securityContext`. Today we leave it alone and focus on what is inside the binary, because that is the bit each service does differently.
 
-Pause for 60 seconds before reading on. Try to list the problems yourself. We will compare lists.
+The other things every service has in common — worth knowing before we tour:
 
-What we should land on:
+- `/livez` is a 200 with no body. The process is up
+- `/healthz` is a JSON status. The process is up **and** its dependencies (Postgres, Redis) are reachable
+- All config comes from environment variables. There are no config files
+- All of them handle `SIGTERM` and run a 30s graceful shutdown
+- All of them log to stdout. No file logging anywhere
 
-1. **The Go compiler is in the runtime image.** A 300MB toolchain that runs once at build time is sitting in our final image, on every node, forever
-2. **It runs as root.** Default `USER` in `golang:1.26-alpine` is root. Any container escape gets a root shell on the node
-3. **`COPY . .` before `go mod download` kills the layer cache.** Edit one line of Go and the dependency layer rebuilds from scratch
-4. **No `.dockerignore`.** `.git`, the local Postgres data dir if we ever copy it, any stray `.env` — all of it lands in the build context
-5. **No health signal baked in.** Kubernetes wants a probe. We will fix that properly in session 9 but the image needs to make it possible
+Hold those four points in your head. Each one of them maps to an EKS feature later — probes, ConfigMaps + ExternalSecrets, Pod terminationGracePeriodSeconds, the cluster log shipper.
 
-Some of these are size problems. Some are security problems. One of them — number 3 — is a developer experience problem that costs us minutes every push. We are going to fix all of them.
-
----
-
-## 2. Build it and measure
-
-We build the naive image first so we have a baseline to beat.
-
-```bash
-cd platform/services/order-service
-docker build -t order-service:naive .
-docker images order-service
-```
-
-Note the size. On my machine right now it is around **440MB**. Anywhere from 380 to 500 is normal.
-
-Now look at where the bytes went:
-
-```bash
-docker history order-service:naive
-```
-
-Two layers dominate. The base image is one. The other is the `COPY . .` plus the build. The compiler itself is most of that base. We do not need it at runtime.
-
-Sanity check it still runs:
-
-```bash
-docker run --rm -e DATABASE_URL=postgres://nope -e PORT=8081 order-service:naive
-# expected: connects to nothing, dies. that's fine. it started.
-```
-
-We have a baseline. Now we fix it.
+Now the tour.
 
 ---
 
-## 3. Cache the dependencies properly
+## 1. api-gateway (port 8080)
 
-The fastest win is reordering two lines. We copy `go.mod` and `go.sum` first, run `go mod download`, then copy the rest of the source. Docker caches each layer by the inputs above it. If only the Go source changed, the dependency layer stays cached.
+**What it does.** The single front door. Auth (login, register, JWT signing), rate limiting, reverse proxy to the other services.
 
-Open `02-containers/lab/Dockerfile.cached`:
+**What it talks to.**
+- Redis (rate limiting state, optional — it degrades gracefully if Redis is unreachable)
+- Every other HTTP service (via env vars `ORDER_SERVICE_URL`, `INVENTORY_SERVICE_URL` etc)
 
-```dockerfile
-FROM golang:1.26-alpine
-WORKDIR /app
+**Dockerfile note.** Identical to the rest. The binary is small. Vendor deps include `go-redis` and `golang-jwt`. No special build flags needed.
 
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY . .
-RUN go build -o /app/service .
-
-CMD ["/app/service"]
-```
-
-Build it once. Then touch `main.go` and build again:
-
-```bash
-docker build -f ../../02-containers/lab/Dockerfile.cached -t order-service:cached .
-touch main.go
-docker build -f ../../02-containers/lab/Dockerfile.cached -t order-service:cached .
-```
-
-The second build should hit `CACHED` on the `go mod download` layer. That is the win. On a service with a lot of dependencies this is the difference between a 4 second rebuild and a 90 second rebuild.
-
-> Try not to think of this as a Docker trick. It is a property of every layered build system. Bazel, BuildKit, Nix — same idea, different syntax.
-
-The image is still 440MB. We have not made it smaller yet. We have only made it faster to rebuild.
+**What bites in EKS.**
+- This is **the only Pod the public internet ever touches**. Session 10 puts Traefik + an NLB + cert-manager in front of it
+- The `JWT_SECRET` env var is currently `local-dev-secret` from `docker-compose.yml`. In EKS it has to come from Secrets Manager via External Secrets (session 8). If it leaks, every user session in the system is forgeable
+- `REDIS_URL` will become `redis://redis-0.redis.default.svc:6379` once Redis is on a StatefulSet (session 7). Stable DNS, not a load balancer
+- This Pod is the obvious candidate for HPA on CPU. Session 9. Everything else scales for different reasons.
 
 ---
 
-## 4. Multi-stage, distroless, non-root
+## 2. order-service (port 8081)
 
-This is the real rewrite. Open `02-containers/lab/Dockerfile`:
+**What it does.** Owns the `orders` table. State machine for order lifecycle (pending → confirmed → processing → shipped → delivered). Publishes `order.created` and `order.status_changed` events.
 
-```dockerfile
-# syntax=docker/dockerfile:1.7
+**What it talks to.**
+- Postgres (its own `orders` and `order_events` tables)
+- SQS via `SQS_QUEUE_URL` (currently LocalStack)
+- No direct calls to other services. Communication is via the event bus
 
-# ---- builder ----
-FROM golang:1.26-alpine AS builder
-WORKDIR /src
+**Dockerfile note.** Identical. The interesting bit is what runs at startup, not what builds.
 
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -ldflags="-s -w" -o /out/service .
-
-# ---- runtime ----
-FROM gcr.io/distroless/static-debian12:nonroot
-WORKDIR /app
-COPY --from=builder /out/service /app/service
-
-USER 65532:65532
-EXPOSE 8081
-ENTRYPOINT ["/app/service"]
-```
-
-We walk it line by line. The questions worth asking out loud:
-
-**Why two `FROM` lines?**
-This is what multi-stage means. The builder stage has the compiler. The runtime stage starts fresh and only copies the compiled binary across. Anything in the builder that we do not `COPY --from=builder` is discarded.
-
-**Why `CGO_ENABLED=0`?**
-Because distroless has no libc. We compile a fully static binary so we do not depend on a dynamic linker that is not there.
-
-**Why `-trimpath` and `-ldflags="-s -w"`?**
-`-trimpath` strips local file paths from the binary — small reproducibility win, also a privacy win. `-s -w` drops the symbol table and DWARF debug info. The binary gets ~25% smaller. We trade off `panic` traces being harder to read. For most services that is the right trade.
-
-**Why `gcr.io/distroless/static-debian12:nonroot`?**
-"Distroless" means no shell, no package manager — nothing in the image except what we put there. The `:nonroot` tag ships with a user `nonroot` at UID 65532 already present, which means `USER 65532:65532` works out of the box.
-
-The price you pay: no `docker exec -it container sh` to debug a running pod. There is no shell to exec into. Live with it. The right way to debug a running container in Kubernetes is `kubectl debug` with an ephemeral container — session 14 territory.
-
-**Why `USER 65532:65532`?**
-Default container user is root. If anyone breaks out of the container, we do not want them landing as UID 0 on the node. Running as a known non-zero UID also makes it easy to lock down `runAsNonRoot: true` in the Pod spec later, which we will do in session 9.
-
-**Why `EXPOSE 8081`?**
-Documentation only. It does not actually open the port — Kubernetes will do that based on the Service spec. But it tells anyone reading the Dockerfile what the contract is.
-
-Now build it:
-
-```bash
-docker build -f ../../02-containers/lab/Dockerfile -t order-service:slim .
-docker images order-service
-```
-
-Expect somewhere around **15 to 20MB**. Down from 440. That is roughly a 95% reduction.
-
-Run it the same way as before:
-
-```bash
-docker run --rm -e DATABASE_URL=postgres://nope -e PORT=8081 order-service:slim
-```
-
-It dies the same way the naive one did. Good. The behaviour is the same. The image is 25 times smaller. Nothing in the runtime can be exploited via a Go compiler we are not using because the compiler is gone.
-
-> Quick aside: try `docker run --rm -it order-service:slim sh`. It will error with `exec format error` or `no such file`. That is the point of distroless. No shell to land in.
+**What bites in EKS.**
+- **Runs migrations on startup.** Look at `main.go` — `migrate()` is called before the HTTP server starts. With one replica this is fine. With three replicas starting cold, all three race for the same `CREATE TABLE IF NOT EXISTS`. Postgres handles it but it is sloppy. Session 15 moves migrations into a Kubernetes `Job` that runs once per release
+- `db.SetMaxOpenConns(25)` — every replica holds up to 25 connections. Three replicas times nine services that do this = 675 connections to a single Postgres pod. Session 7 caps it
+- `publishEvent` will need IRSA with `sqs:SendMessage` scoped to one specific queue ARN. Session 11
+- The order state transitions are in-memory only (`validTransitions` map). No cache, no leadership. Safe to scale horizontally.
 
 ---
 
-## 5. `.dockerignore`
+## 3. inventory-service (port 8082)
 
-Without one, Docker tarballs the entire build context — everything in the directory you ran `docker build` from — and ships it to the daemon. For our services that means `.git`, any local `vendor/` directory, OS junk, build artefacts. Sometimes secrets we did not mean to copy.
+**What it does.** Stock levels per SKU. Reservations with TTLs. The bit that prevents double-selling the last item.
 
-Drop `02-containers/lab/.dockerignore` into each service folder:
+**What it talks to.**
+- Postgres (`products` and `reservations` tables)
+- Nothing else. It is called by `order-service` (synchronously) and by the worker (asynchronously)
 
-```
-.git
-.gitignore
-.dockerignore
+**Dockerfile note.** Identical.
 
-# editor
-.vscode
-.idea
-*.swp
-
-# go
-vendor/
-bin/
-*.test
-*.out
-coverage.out
-
-# os
-.DS_Store
-Thumbs.db
-
-# env
-.env
-.env.*
-!.env.example
-
-# misc
-README.md
-*.md
-docs/
-```
-
-Two notes on that file. We ignore `README.md` because it does not need to be in the image — saves a few KB and avoids accidentally shipping internal notes. We do not ignore `go.mod` or `go.sum` because we need them for `go mod download`.
-
-Rebuild and watch the "Sending build context to Docker daemon" line. On `order-service` it should drop from a few MB to under 200KB.
+**What bites in EKS.**
+- **The reservation logic is racey.** Two replicas getting two simultaneous `POST /reserve` calls for the last unit could both succeed. In real life this needs a Redis-based distributed lock or a Postgres `SELECT ... FOR UPDATE`. The current code uses the latter loosely. Worth flagging — we will look at the SQL together in session 7
+- Same migration-on-startup pattern as `order-service`. Same fix in session 15
+- This service is **read-heavy**. In session 14 it is the one we put a cache hit / miss dashboard on first.
 
 ---
 
-## 6. The other eight services
+## 4. payment-service (port 8083)
 
-We are not going to rewrite nine Dockerfiles live. We will rewrite one (we just did) and then talk about the two that are different.
+**What it does.** Charges, refunds, the ledger. Fake processing today (a `math/rand` 90% success rate) but the boundaries are real.
 
-**The worker** — `platform/services/worker/Dockerfile`. This service has no HTTP port. It long-polls SQS, fans out events. So:
+**What it talks to.**
+- Postgres (`payments` and `ledger` tables)
+- SQS (publishes `payment.processed`, `payment.failed`)
+- In real life: a payment provider. We stub it.
 
-- No `EXPOSE` line in the runtime stage
-- The Service definition we write later will be headless — there is nothing to load balance
-- Liveness will not be `/healthz`; it will be the process being alive at all. Session 9.
+**Dockerfile note.** Identical.
 
-Everything else about the Dockerfile is the same as `order-service:slim`.
+**What bites in EKS.**
+- This is the **most sensitive Pod in the cluster**. Its IRSA role should grant `sqs:SendMessage` on exactly one queue. Nothing else. Session 11 is where we draw that boundary
+- `math/rand` is fine for a demo. In a real system it would never come anywhere near a payment path. Worth saying out loud so nobody copies this pattern home
+- Ledger writes need to be transactional with payment status updates. Look at the SQL — they currently are. Session 15 includes a "what happens if you blow up between two writes" exercise targeted at this service.
 
-**The dashboard-api** — `platform/services/dashboard-api/Dockerfile`. This one serves a UI from `/static`. The naive reflex is "I need to COPY the static folder into the runtime stage". Open `main.go`:
+---
+
+## 5. notification-service (port 8084)
+
+**What it does.** Sends emails and SMS. Stores templates. Logs delivery history. Today it is mocked — every send just inserts a row.
+
+**What it talks to.**
+- Postgres (`notifications`, `templates`)
+- In real life: SMTP (SES) and SMS (SNS or Twilio). Today: stubs.
+
+**Dockerfile note.** Identical.
+
+**What bites in EKS.**
+- This is the service that **needs egress most badly**. In session 3 when we talk about killing the NAT gateway to save money, this is the awkward one — sending email to an external SMTP server needs outbound internet. VPC endpoints help for AWS-native (SES, SNS) but not for a third-party provider
+- SMTP creds, SMS provider keys → Secrets Manager, External Secrets. Session 8
+- In a real disaster (the email queue backs up overnight), notifications becomes the **noisy neighbour** that hogs Postgres connections. Session 14 alerting catches that.
+
+---
+
+## 6. shipping-service (port 8085)
+
+**What it does.** Creates shipments. Tracks them. Receives webhooks from carriers (`POST /webhook`).
+
+**What it talks to.**
+- Postgres (`shipments`, `tracking_events`)
+- SQS (publishes shipment status changes)
+- In real life: carrier APIs (DHL, UPS, Royal Mail). Stubbed today.
+
+**Dockerfile note.** Identical.
+
+**What bites in EKS.**
+- The `/webhook` endpoint is the **second Pod that needs to be reachable from the public internet** — couriers need to POST to it. Session 10 has to route `/webhook/shipping` through Ingress with tighter IP allow-listing than the main app gets
+- Webhooks are at-least-once. Same idempotency lesson as the worker. The handler must be safe to call twice with the same payload
+- Outbound to carrier APIs hits the same NAT / egress question as notification-service.
+
+---
+
+## 7. scheduler (no main port, health on :8091)
+
+**What it does.** Background cron jobs. Expire abandoned reservations every minute. Detect abandoned carts every 5. Retry failed payments every 15. Generate daily digests every hour. Clean up old events every 30 minutes.
+
+**What it talks to.**
+- Postgres only (read-write)
+- Indirectly: triggers SQS via the data it writes
+
+**Dockerfile note.** Identical, but the runtime shape is different. Open `main.go` — there is no main HTTP server. Just goroutines on tickers, plus a tiny health server on port 8091.
+
+**What bites in EKS.** This is the most interesting one.
+
+- **You cannot run two of these.** Two scheduler Pods means every cron job fires twice — duplicate reservations expired twice, duplicate digests sent twice. The fix has two shapes:
+  - Keep it as a Deployment with **`replicas: 1` and `strategy: Recreate`**. Simple but lossy during deploys
+  - **Move each interval job into a Kubernetes `CronJob`**. Cluster-native, each tick is a fresh Pod, no leader election needed. This is what production-grade looks like. Session 9 mentions it; session 15 makes the call
+- Health port 8091 is the only thing to probe. There is no app port to expose in the Pod spec
+- `db.SetMaxOpenConns(5)` — only 5 connections because nothing else is going through this Pod. Worth knowing for the connection-budget calculation later.
+
+---
+
+## 8. worker (no main port, health on :8090)
+
+**What it does.** Long-polls SQS, fans events out to the other services over HTTP. The async glue of the platform.
+
+**What it talks to.**
+- SQS (consumes)
+- Every other HTTP service (calls them with events)
+- **No Postgres connection**. The only service without one.
+
+**Dockerfile note.** Identical, but again the runtime shape differs. No main HTTP port. Tiny health server on 8090. No database wait at startup.
+
+**What bites in EKS.**
+- **HPA on CPU is wrong here.** An idle worker uses no CPU. Bursting it for CPU does nothing useful. The right answer is **KEDA with the SQS scaler** — scale on queue depth. Session 11 introduces it, session 9 mentions where KEDA fits
+- SQS delivery is **at-least-once**. Every handler must be idempotent. If you process the same `order.created` event twice, you should not create two orders. The current handlers are roughly idempotent (they call HTTP endpoints that themselves de-dupe) but not airtight. Session 11 talk
+- The DLQ is the thing nobody thinks about until messages start landing in it. Session 11 wires up a CloudWatch alarm on DLQ depth so we know
+- IRSA for the worker is the **biggest of the nine** by surface area — `sqs:ReceiveMessage`, `sqs:DeleteMessage` and `sqs:GetQueueAttributes` on the main queue, plus the same on the DLQ for inspection. Still scoped to those two queues only.
+
+---
+
+## 9. dashboard-api (port 8086)
+
+**What it does.** Admin UI plus a JSON API for the metrics behind it. Order stats, revenue charts, low-stock alerts, shipping overview.
+
+**What it talks to.**
+- Postgres (read-mostly, cross-table queries)
+- Indirectly through other services in some endpoints. Mostly direct DB reads for speed.
+
+**Dockerfile note.** Identical on paper. **Different in practice** — look at `main.go`:
 
 ```go
 //go:embed static
 var staticFiles embed.FS
 ```
 
-The `//go:embed` directive bakes the static folder into the compiled binary at build time. So our runtime stage only needs the binary — same as every other service. The static assets ride along inside it.
+The `//go:embed` directive bakes the entire `static/` folder (HTML, CSS, JS) into the compiled Go binary at build time. So even though the Dockerfile looks identical to every other one, this binary is the only one that contains a UI inside it. No separate `COPY static ./static` is needed at runtime. Go does it at compile time.
 
-This is the lesson: a template works. Cloning does not. Six services share an identical Dockerfile. One drops the `EXPOSE` line. One does not need a separate `COPY` for assets because the language handles it. **Read the code before you copy the Dockerfile.**
+This is a subtle but important point: **a template Dockerfile works because the language handles the variation for us**. If this UI were a separate `dist/` folder served by a Node process, the Dockerfile would need its own runtime stage with the static files. Because it is Go with embed, it does not.
 
-The other six (`api-gateway`, `inventory-service`, `payment-service`, `notification-service`, `shipping-service`, `scheduler`) are identical to `order-service` apart from the `EXPOSE` port number. We will template that with a small `Makefile` for homework.
-
----
-
-## 7. Tag by SHA. Why `:latest` is a footgun
-
-When we push to ECR next week, every tag is a contract. Two patterns to know about:
-
-**Mutable tags** (`:latest`, `:dev`, `:main`) — point to whatever was pushed most recently. Good for local dev. Bad for clusters, because two Pods can pull the "same" tag at different times and get different binaries. Rollback becomes "rebuild the previous code and push it to the same tag", which is slow and lossy.
-
-**Immutable tags** (the Git SHA) — point to one specific build forever. Rollback becomes "edit one line in a manifest to the previous SHA". Fast. Auditable. Survives a 3am page.
-
-The pattern we want:
-
-```bash
-SHA=$(git rev-parse --short HEAD)
-docker build -t order-service:$SHA -f 02-containers/lab/Dockerfile platform/services/order-service
-docker tag order-service:$SHA order-service:latest    # for local convenience
-```
-
-Both tags exist. The SHA is the truth. `:latest` is a courtesy.
-
-There is a tiny `Makefile` in `02-containers/lab/` that does this across all nine services. Copy it into your own work. We wire ECR push into it in session 13 when we set up OIDC and GitHub Actions.
-
-> ECR has a setting called **tag immutability**. We will turn it on in session 13. Once on, you cannot overwrite a tag — pushing `order-service:abc123` twice with different content errors. It saves you from a class of bug that only shows up when you really need it not to.
+**What bites in EKS.**
+- The UI being baked into the binary means we can rebuild and roll the dashboard with the same SHA-bump pattern as every other service. No separate artefact, no CDN to invalidate
+- This is the **third Pod that needs to be reachable from the public internet** — engineers and admins land on it through Ingress. Different ingress path from the customer-facing api-gateway (probably `admin.<domain>` rather than `app.<domain>`), tighter auth
+- Read-heavy. Connection pool is `SetMaxOpenConns(10)`. The dashboard queries are big — session 14 includes a "do not bring the cluster down with a 30-second Postgres query from a Grafana panel" cautionary tale, and this service is the example.
 
 ---
 
-## 8. Where this lands next week
+## What we just saw
 
-Quick preview. Do not implement anything yet.
+Nine services. Nine almost-identical Dockerfiles. Nine very different things going on inside.
 
-Next week is VPC. The week after is the EKS cluster. The week after that we install Karpenter so nodes appear when Pods need them. None of that uses the image we built today, directly. But all of it exists so that this command works:
+Three patterns to lock in:
 
-```bash
-kubectl run order-service --image=$ACCOUNT.dkr.ecr.eu-west-2.amazonaws.com/order-service:abc123
-```
+**By shape.**
+| Pattern | Services | What the cluster needs |
+|---|---|---|
+| HTTP API, talks to Postgres | order, inventory, payment, notification, shipping, dashboard-api | Deployment + Service + Ingress for some |
+| HTTP gateway, talks to Redis | api-gateway | Deployment + Service + Ingress + HPA |
+| No HTTP API, talks to SQS | worker | Deployment + KEDA + DLQ alarm |
+| No HTTP API, ticker-based | scheduler | CronJob (or Deployment with replicas=1) |
 
-A node has to exist. It has to have the permission to pull from ECR. It has to be on a subnet that can route to ECR endpoints. The Pod has to be allowed to come up as UID 65532 because we told it to.
+**By public reach.**
+- api-gateway, shipping-service (webhook), dashboard-api — public internet
+- The other six — internal only, never leaves the cluster
 
-That is the bridge. Every line we wrote in the Dockerfile today shows up in a cluster decision next month:
+**By IRSA need.**
+- order, payment, shipping — `sqs:SendMessage` on the events queue
+- worker — `sqs:ReceiveMessage`, `sqs:DeleteMessage` on main queue and DLQ
+- Everyone else — no AWS API calls at all (currently)
 
-- `USER 65532:65532` → `securityContext.runAsNonRoot: true` in the PodSpec
-- `EXPOSE 8081` → `containerPort: 8081` in the PodSpec and `targetPort: 8081` in the Service
-- Static binary → no surprise glibc mismatch when we move from Alpine to distroless nodes
-- Small image → faster Pod startup, faster Karpenter scale up, less ECR data transfer cost
+This is the table the rest of the series builds against.
 
-We did not build a Docker image today for the sake of it. We built the unit of deployment for the next 12 weeks.
+## Service → future session map
 
----
+| Service | First session it shapes a decision in |
+|---|---|
+| api-gateway | Session 10 (Ingress, TLS), Session 9 (HPA) |
+| order-service | Session 11 (SQS + IRSA), Session 15 (migrations) |
+| inventory-service | Session 7 (Postgres locking patterns) |
+| payment-service | Session 8 (Secrets), Session 11 (least-privilege IRSA) |
+| notification-service | Session 3 (NAT vs VPC endpoints), Session 8 (third-party creds) |
+| shipping-service | Session 10 (webhook ingress path) |
+| scheduler | Session 9 / 15 (CronJob vs Deployment) |
+| worker | Session 11 (SQS, KEDA, DLQ alarms) |
+| dashboard-api | Session 10 (admin ingress), Session 14 (heavy reader on the data plane) |
 
-## Lab artefacts
-
-Everything we touched in this session lives under `02-containers/lab/`:
-
-- `Dockerfile` — the multi-stage version we wrote
-- `Dockerfile.cached` — the intermediate step (kept for the diff)
-- `.dockerignore` — copy this into every service folder
-- `Makefile` — `make build` builds all nine, tagged by short SHA
-
-The lab Dockerfiles are deliberately separate from `platform/services/*/Dockerfile`. That way you can diff the naive against the rewrite when revisiting this episode.
+If you read this table backwards, it tells you why we touch the things we touch in the order we touch them.
 
 ---
 
 ## Homework
 
-1. Replace each `platform/services/*/Dockerfile` with a multi-stage build. The `worker` and `dashboard-api` need attention — the rest are a copy job
-2. Drop the `.dockerignore` into every service folder
-3. Run `make build` from `02-containers/lab/`. Expect 9 images, each tagged with the short SHA, each under 25MB
-4. Run `docker compose up --build` from `platform/`. Place an order via the smoke test from [EP1](../01-foundations/README.md#smoke-test). The behaviour should be identical to last week with images 20x smaller
-5. Push the rewritten Dockerfiles to your fork. Comment on the PR / commit with the before and after image sizes for one service
+1. Open each `main.go` in `platform/services/`. For each one, write down the list of env vars it reads. There should be between 2 and 8 per service
+2. For each service, write a single line: "this becomes a `Deployment` / `StatefulSet` / `CronJob`". Defend the answer for the scheduler and the worker out loud to someone (or write it in your README)
+3. Run `docker compose up --build` from `platform/` if you have not lately. Place an order. Watch the worker logs catch the event. The async path you see in compose is the same async path we light up in session 11, just with real SQS instead of LocalStack
+4. Pick one service you do not understand yet. Read it in full. Bring one question about it to next week
 
 ---
 
-## Common confusions
+## What we are not doing today
 
-- **"Distroless still has Debian in the name. Is it Debian?"** Yes. The static-debian12 base inherits a tiny Debian rootfs (CA certs, tzdata, `/etc/passwd` with the `nonroot` user). No package manager, no shell. The "Debian" is the source of those few files, not a running OS
-- **"Why not Alpine for everything?"** Alpine uses musl libc, not glibc. CGO code that links against glibc breaks on Alpine. Our Go services build with `CGO_ENABLED=0` so they do not care — but anything you migrate from another language might. Distroless dodges that conversation entirely
-- **"What about `scratch`?"** Same idea as distroless but with literally nothing — not even CA certificates. Fine for a Go binary that never makes outbound TLS. The moment any of your services do (and ours do, to LocalStack and later AWS APIs), you need the CA bundle. `distroless/static` ships it. `scratch` does not
-- **"What if I want a shell for debugging?"** Use `gcr.io/distroless/static-debian12:debug-nonroot` in dev. It adds BusyBox so `kubectl exec -it pod sh` works. Never ship `:debug-*` to prod
+- Rewriting any Dockerfile. The current ones are intentionally rough. We tighten them in session 9 when we know what the cluster wants from them
+- Building images for ECR. ECR comes in session 13 when CI/CD is wired in
+- Talking about probes, resources, IRSA in any depth. Each gets its own session
+
+If you find yourself wanting to do any of those today, hold the thought. Write it down. We will get there.
 
 ---
 
-## Pitfalls we want to spot in homework
+## Next week
 
-- Copy pasting the same Dockerfile into all nine services without dropping `EXPOSE` from the worker. The worker has nothing to expose
-- Forgetting `CGO_ENABLED=0` and shipping a binary that segfaults on distroless with a confusing dynamic linker error
-- Putting `USER nonroot` (the name) instead of `USER 65532:65532` (the UID). Kubernetes wants the numeric UID for `runAsNonRoot` checks
-- Ignoring `go.sum` in `.dockerignore` and breaking reproducible builds
-- Tagging images `:dev` or `:latest` and then wondering why two Pods are running different code
-
-Bring the before and after image size for one service to next week. We will start session 3 by looking at the table.
+Session 3. VPC and network design. Now that we know which Pods need public reach (3 of 9) and which need outbound internet (notification-service in particular), we can design the network around it instead of waving our hands at it.
