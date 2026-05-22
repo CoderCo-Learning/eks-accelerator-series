@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1.7
+#
+# Worker variant. Identical to ./Dockerfile except no EXPOSE.
+# The worker long polls SQS and fans out events. Nothing listens on a port.
+#
+# Build from platform/services/worker/:
+#   docker build -f ../../../02-containers/lab/Dockerfile.worker -t worker:slim .
+
+FROM golang:1.26-alpine AS builder
+WORKDIR /src
+
+COPY go.mod go.sum* ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags="-s -w" -o /out/service .
+
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+COPY --from=builder /out/service /app/service
+
+USER 65532:65532
+ENTRYPOINT ["/app/service"]

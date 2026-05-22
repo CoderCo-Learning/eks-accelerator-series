@@ -1,0 +1,15 @@
+# Intermediate step from the lesson. Single stage, but with the
+# dependency layer cached separately from the source. Use this to
+# demonstrate the layer cache win before moving to the multi stage
+# build in ./Dockerfile.
+
+FROM golang:1.26-alpine
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN go build -o /app/service .
+
+CMD ["/app/service"]
