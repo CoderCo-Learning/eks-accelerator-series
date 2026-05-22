@@ -137,22 +137,69 @@ The Dockerfiles look almost identical here because every service in our platform
 
 ---
 
-## Quick vocab for this session
+## CoderCo's Technical Vocab (CTV) Dictionary
 
-You will hear these words a lot. Skip if you already know them.
+You will hear these words a lot across the series. Skip the bits you already know.
 
+### Kubernetes things
+
+- **Pod**: the smallest unit of work K8s schedules. One or more containers that share networking and storage. Usually one container per Pod
+- **Service (K8s) / ClusterIP**: a stable virtual IP plus a DNS name for a set of Pods. You call the Service, K8s routes to whichever Pod is ready. ClusterIP is the default type and is reachable only from inside the cluster
 - **Deployment**: a Pod template plus a replica count. K8s keeps that number of Pods running. Used for stateless apps
 - **StatefulSet**: like a Deployment, but each Pod gets a stable name (`postgres-0`, `postgres-1`) and its own disk that follows it around. We saw this in EP1
-- **CronJob**: a K8s object that runs a Pod on a schedule. Same idea as Linux cron, but cluster-aware. K8s creates a fresh Pod each tick
-- **Ingress**: a K8s object that says "send traffic for this URL path to this Service". Needs an Ingress controller running in the cluster to actually do the routing
+- **Job**: runs a Pod once, tracks whether it succeeded, then exits. Used for one-shot tasks like a database migration on release
+- **CronJob**: spawns a Job on a schedule. Same idea as Linux cron, but cluster-aware
+- **Ingress**: a K8s object that says "send external traffic for this URL path to this Service". Needs an Ingress controller running in the cluster to actually do the routing
 - **HPA (Horizontal Pod Autoscaler)**: watches a metric (usually CPU) and scales the number of replicas in a Deployment up or down
-- **IRSA (IAM Roles for Service Accounts)**: the EKS feature that lets a Pod assume an AWS IAM role without any static access keys. The Pod gets the role via a K8s ServiceAccount that is annotated with the role ARN
 - **KEDA**: a community add-on that scales Deployments on external signals like SQS queue depth or Postgres row counts. Where the built-in HPA is "scale on CPU", KEDA is "scale on whatever metric you can name"
-- **DLQ (Dead Letter Queue)**: an SQS feature. If a worker fails to process a message a certain number of times, SQS moves it to the DLQ so it does not block the main queue
-- **Idempotent**: an operation you can run twice and the end state is the same as running it once. Important for SQS because the same message can be delivered more than once
-- **At-least-once delivery**: SQS guarantees a message is delivered at least once. Sometimes that means more than once. Hence the idempotency point above
+- **ServiceAccount**: the K8s identity a Pod runs as. IRSA annotates a ServiceAccount with an IAM role ARN so the Pod can assume that role at runtime without static keys
+- **Rolling update**: the default deploy strategy. K8s starts a new Pod, then kills an old one and repeats until done. Zero downtime if the readiness probe is honest
+- **Recreate strategy**: the opposite. Kill every old Pod first, then start the new ones. Brief downtime but you never have two versions running at the same time. Useful for singletons like the scheduler
 - **ConfigMap**: a K8s object that holds non-secret config. Mounted into Pods as env vars or files
 - **Secret**: same idea as a ConfigMap but for sensitive values. K8s does not encrypt them by default; we source them from AWS Secrets Manager via the External Secrets operator
+- **IRSA (IAM Roles for Service Accounts)**: the EKS feature that lets a Pod assume an AWS IAM role without any static access keys. The Pod gets the role via the ServiceAccount it runs as
+
+### AWS things
+
+- **SQS (Simple Queue Service)**: AWS managed message queue. Producers send messages, consumers pull them. We use it as the event bus between order-service, payment-service, shipping-service and worker
+- **DLQ (Dead Letter Queue)**: an SQS feature. If a consumer fails to process a message a certain number of times, SQS moves it to the DLQ so it does not block the main queue
+- **ARN (Amazon Resource Name)**: the canonical AWS identifier for a resource. Looks like `arn:aws:sqs:eu-west-2:123456789012:order-events`. IRSA policies are written against ARNs
+- **NLB (Network Load Balancer)**: AWS layer-4 load balancer that forwards raw TCP traffic without inspecting it. We put one in front of our Ingress controller
+- **NAT Gateway**: AWS managed service that lets resources in private subnets initiate outbound connections to the public internet. The reason notification-service can call an external SMTP server
+- **VPC endpoint**: a private route from inside a VPC straight to an AWS service, avoiding the public internet and the NAT Gateway hop. Lets us reach SQS or S3 without a NAT
+- **Secrets Manager**: AWS managed secret store. Holds things like DB passwords and third-party API tokens. Never put these in YAML
+- **SES (Simple Email Service)**: AWS managed email sender. Would back the notification-service in real life
+- **SNS (Simple Notification Service)**: AWS managed pub/sub, also a backend for SMS. The other half of the notification-service in real life
+- **CloudWatch alarm**: AWS feature that fires (pages someone, runs a Lambda) when a metric crosses a threshold. We wire one to DLQ depth later in the series
+- **LocalStack**: a local emulator for AWS services. We use it in compose so we get a fake SQS without needing a real AWS account
+
+### Patterns and concepts
+
+- **Long polling**: an SQS receive call that waits up to 20 seconds for a message to arrive before returning. Fewer API calls and lower latency than short polling. The worker uses this
+- **Short polling**: the opposite of long polling. The receive returns immediately even if the queue is empty. More API calls per second, higher cost
+- **Webhook**: an HTTP call made INTO our system by an external service when something happens there. Couriers POST to shipping-service when a parcel changes status
+- **JWT (JSON Web Token)**: a signed token the client carries on every request to prove who they are. We verify the signature locally instead of looking up a session in a database
+- **HMAC signature**: a cryptographic signature on a payload, computed with a shared secret. Used to prove a webhook came from who it claims to be
+- **Idempotent**: an operation you can run twice and the end state is the same as running it once. Important for SQS because the same message can be delivered more than once
+- **At-least-once delivery**: SQS guarantees a message is delivered at least once. Sometimes that means more than once. Hence the idempotency point above
+- **State machine**: an object that can only move between specific named states via specific allowed transitions. Our order goes pending → confirmed → processing → shipped → delivered, never directly from pending to shipped
+- **Race condition**: two operations happening at the same time produce a different (wrong) outcome than running them one after the other. The inventory reservation logic has one
+- **Distributed lock**: a mutex that works across multiple processes or machines. Usually backed by Redis or a database row lock. Cures certain race conditions
+- **Connection pool**: a set of pre-opened database connections that an app reuses. Bigger pool means more concurrent queries at the cost of more load on the database
+- **Transaction (database)**: a group of writes that either all succeed or all fail (`BEGIN ... COMMIT`). Stops the database being left half-written if the app crashes mid-flight
+- **Trace ID / distributed tracing**: a single identifier that follows one request through every service it touches, so we can stitch logs and spans into one timeline. Without it, debugging a microservices request is mostly guessing
+- **Noisy neighbour**: a workload that hogs shared resources (DB connections being the obvious one) and starves everyone else sharing them
+- **TTL (Time To Live)**: a duration after which a value expires on its own. Inventory reservations have a TTL so abandoned baskets release the stock automatically
+- **Egress**: outbound network traffic leaving a resource. For Pods specifically: making outbound calls to anything outside the cluster
+
+### Tools and code
+
+- **Traefik**: an Ingress controller. The thing that actually routes external traffic to the right Service inside the cluster
+- **cert-manager**: a K8s operator that talks to Let's Encrypt to issue and renew HTTPS certificates automatically
+- **External Secrets (operator)**: a K8s operator that syncs values from AWS Secrets Manager into K8s Secret objects so passwords never go in YAML
+- **Grafana**: open-source dashboard tool. We use it to visualise metrics from Prometheus
+- **CDN (Content Delivery Network)**: a global cache for static assets. Mentioned in this lesson only because the dashboard-api does NOT need one; we serve the UI from inside the Go binary
+- **Goroutine + Ticker (Go)**: a goroutine is a cheap, lightweight Go thread; a ticker is a Go construct that fires a channel on a fixed interval. The scheduler and worker both use these for background loops
 
 ---
 
