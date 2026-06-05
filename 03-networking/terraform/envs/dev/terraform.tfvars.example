@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored at the repo root.
+
+region       = "eu-west-2"
+name         = "eks-accel-dev"
+cluster_name = "eks-accel-dev"
+
+# single  = one NAT, cheap, not HA (good for dev)
+# per_az  = one NAT per zone, HA, ~3x the cost
+# none    = endpoints only, no third-party egress
+nat_mode = "single"
