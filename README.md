@@ -8,6 +8,7 @@ Each session is a single topic deep dive. The brief for the project is in [proje
 
 - [EP 1: Foundations & Local Dev](01-foundations/README.md)
 - [EP 2: Containers](02-containers/README.md)
+- [EP 3: VPC & Network Design](03-networking/README.md)
 
 ## Platform snapshot
 
