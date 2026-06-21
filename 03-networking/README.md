@@ -21,6 +21,8 @@ Full brief: [project.md](../project.md). The relevant line is *"VPC with private
 
 ## The shape of the problem
 
+> Editable architecture diagram for this session: [`diagrams/ep3-networking-architecture.drawio`](diagrams/ep3-networking-architecture.drawio) (three pages: the full VPC, the egress decision and the security-group layers). Open it in [draw.io](https://app.diagrams.net).
+
 Here is roughly where everything ends up once the cluster is built on top of this VPC. We build the VPC, its subnets, routing and endpoints today. The nodes, NLB and control plane are drawn so you know what the network is for.
 
 ```mermaid
