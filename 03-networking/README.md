@@ -4,10 +4,6 @@
 
 You can already build a VPC. Subnets, route tables, an IGW, a NAT gateway, you have wired all of that before. This episode is about the parts that are specific to EKS and the parts that only bite once the platform grows, because a VPC built for Kubernetes is not the shape of the one your ECS project used.
 
-The mistakes here do not fail on day one. They surface three episodes later when Karpenter is mid-scale and a `/24` runs dry, or six months in when cross-AZ data transfer is quietly the third line on the bill and DNS starts timing out under load. So we design the network on purpose and make a deliberate, costed decision about the bit that dominates the bill and the bit that dominates the incident channel.
-
-Full brief: [project.md](../project.md). The relevant line is *"VPC with private subnets, no NAT if you can avoid it"*. By the end of this you will know exactly how far "if you can avoid it" stretches, and what changes when there are forty nodes instead of four.
-
 No cluster yet. That is EP4. Today is the ground it stands on.
 
 ## What you walk out with
@@ -20,7 +16,7 @@ No cluster yet. That is EP4. Today is the ground it stands on.
 
 ---
 
-## The shape of the problem
+## The problem
 
 > Editable diagram for this session: [`diagrams/ep3-networking-architecture.drawio`](diagrams/ep3-networking-architecture.drawio) (three pages: the VPC, the egress decision and the security-group layers). Open it in [draw.io](https://app.diagrams.net). The PNGs below are exports of it.
 
@@ -45,7 +41,7 @@ Two tiers, three AZs, six subnets. You know the shape, the EKS-specific parts ar
 
 The public tier is deliberately tiny: it holds a NAT gateway and the occasional load-balancer ENI, so a `/24` is already generous. The private tier is large for a reason that catches everyone, covered in section 2.
 
-### The tags are load-bearing, not decoration
+### The tags are important
 
 Two different controllers find subnets by querying the AWS API for tags. Neither reads your Terraform. Get the tags wrong and the symptom shows up far from the cause.
 
