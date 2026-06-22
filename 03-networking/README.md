@@ -125,24 +125,65 @@ A public subnet holds a NAT gateway and the occasional load balancer ENI. That i
 
 ## 2. The CIDR maths, and why a /16 fills up
 
-This is the part that surprises people coming from ECS.
+This is the part that surprises people coming from ECS, and it is worth slowing down on, because the mistake here does not fail today. It surfaces three episodes later as a "random" cluster problem when Karpenter is mid-scale.
 
-On EKS with the default **AWS VPC CNI**, every pod gets a real IP address out of the **node's subnet**. There is no separate overlay network and no separate "pod CIDR" the way a kubeadm cluster has. A pod IP and a node IP come from the same pool. So your private subnets are not sized for nodes, they are sized for nodes *plus every pod those nodes will ever run at once*.
+On EKS with the default **AWS VPC CNI**, every pod gets a real IP address from the **node's subnet**. There is no overlay network and no separate "pod CIDR" the way a kubeadm or Calico cluster has. Pod IPs and node IPs come out of the same pool. So a private subnet has to be sized for the nodes and for every pod those nodes will ever run at the same time.
 
-Work an example. A `/19` private subnet is 8,192 addresses. AWS reserves 5 per subnet, so call it 8,187 usable. Now:
+### Where the per-node pod limit comes from
 
-- An `m5.large` can run up to 29 pods under the default CNI (limited by ENIs and IPs per ENI, not by CPU)
-- Karpenter is happy to pack a few dozen nodes into one AZ under load
-- 40 nodes at ~29 pod-IPs each is roughly 1,160 IPs, plus the node IPs, plus headroom the CNI holds warm on each ENI
+The default CNI does not give a node unlimited pod IPs. The ceiling is set by how many network interfaces the instance type supports and how many IPs each interface carries:
 
-You can see how a smaller subnet, a `/24` at 250 IPs say, runs dry after a single busy node. The symptom is ugly: pods stuck in `ContainerCreating` while the CNI logs `failed to assign an IP address to container`. It reads like a cluster bug when it is really a subnet-sizing bug.
+```
+max pods = (ENIs per instance x (IPv4s per ENI - 1)) + 2
+```
 
-Two levers change the maths, and you should know they exist even though we keep the defaults today:
+The `- 1` drops each ENI's primary IP, which the node keeps for itself. The `+ 2` covers host-network pods like `aws-node` and `kube-proxy` that ride the node IP and cost no secondary address. An `m5.large` is 3 ENIs at 10 IPs each, so `(3 x 9) + 2 = 29`. That is where the famous 29 comes from, and it is an ENI and IP ceiling rather than a CPU or memory one. A bigger instance buys more pods mostly because it carries more ENIs. AWS publishes the per-type number in `eni-max-pods.txt`, and the node's `.status.capacity.pods` shows the value it actually booted with.
 
-- **Prefix delegation.** The CNI hands each ENI a `/28` prefix (16 IPs) instead of single IPs, which raises pod density per node a lot and changes how fast subnets drain. Worth turning on for real workloads.
-- **Custom networking.** Pods draw from a secondary CIDR you attach to the VPC, separating pod IPs from node IPs entirely. More moving parts, used when you are genuinely short of RFC1918 space.
+### The warm pool, the bit that actually drains the subnet
 
-For the project, a `/16` VPC with three `/19` private subnets gives you room to be careless and still not run out. That is the point. Size for the pod count, not the node count.
+Here is the nuance that catches people who did the napkin maths and still ran out. The CNI does not allocate one IP at a time. It attaches a whole ENI and keeps a spare ready so pod startup stays fast. The default `WARM_ENI_TARGET=1` means every node holds one full extra ENI's worth of IPs warm and idle. An `m5.large` running four pods can be sitting on roughly twenty subnet IPs, most of them doing nothing.
+
+So your real subnet draw is closer to "nodes x IPs-per-ENI x warm factor" than "nodes x running pods". Two knobs tighten it when address space is precious:
+
+- `WARM_IP_TARGET` with `MINIMUM_IP_TARGET` makes the CNI hold a small fixed pool of spare IPs instead of a whole ENI. Tighter packing, paid for with more EC2 API calls as pods churn, which can hit API throttling on a busy cluster.
+- `WARM_ENI_TARGET=0` alongside a `MINIMUM_IP_TARGET` is the usual production setting for IP-constrained accounts.
+
+Leave the defaults tonight. The thing to carry out of here is that the default trades address space for launch speed, and that the trade is tunable the day a subnet starts to fill.
+
+### Size it on purpose
+
+Do the sum once, up front, per AZ:
+
+```
+IPs per AZ  =  peak nodes in that AZ  x  max-pods per node  x  warm factor (~1.1 to 1.3)
+```
+
+Work the project. A `/19` private subnet is 8,192 addresses, AWS reserves 5, so call it 8,187 usable. Forty `m5.large` nodes at 29 pods is ~1,160 pod IPs, plus node and warm-pool IPs, sitting comfortably inside a `/19` with room to be careless. Drop to a `/24` at 251 usable and one busy node drains it, and the symptom is ugly: pods stuck in `ContainerCreating` while the CNI logs `failed to assign an IP address to container`. It reads like a cluster fault when the subnet has simply run dry. Size for the peak and leave headroom, because you cannot resize a subnet after the fact. You can only bolt on new ones.
+
+### Prefix delegation, and the gotcha nobody mentions
+
+Turning on prefix delegation changes the unit the CNI hands out. Each ENI gets a `/28` prefix of 16 IPs in one allocation instead of single addresses, which lifts pod density per node hard and is the right default for real workloads. Two things to know before you reach for it:
+
+- AWS still caps `max-pods` at 110 on nodes under 30 vCPUs (250 above) by recommendation, so the win is density without the old ENI ceiling, rather than infinite pods on a node.
+- A `/28` prefix has to be a **contiguous** block. On a long-lived, churny subnet the free space fragments, and the CNI can fail to find a free `/28` while hundreds of single IPs still sit free, throwing `InsufficientCidrBlocks`. The fix is to give prefix-delegation nodes subnets with generous contiguous space, which is one more argument for the large `/19`s.
+
+### When a /16 genuinely is not enough
+
+A VPC primary CIDR tops out at a `/16`, and a busy multi-cluster account works through `10.0.0.0/8` faster than people expect. Two real escape hatches, neither needed for this project:
+
+- **Secondary CIDRs with custom networking.** Attach extra ranges to the VPC, including the carrier-grade `100.64.0.0/10` space, and point pod IPs at them through `ENIConfig` so pods stop competing with nodes for the routable range. More moving parts, used when RFC1918 space is genuinely tight.
+- **IPv6 mode.** An IPv6 cluster hands every pod an address from a `/80` per ENI, which is effectively unlimited, and the exhaustion problem disappears. It is a cluster-creation-time decision with its own egress and tooling consequences, so it is a deliberate architecture call rather than a flag you flip later.
+
+### The address ranges people confuse
+
+Two different ranges live in an EKS cluster and people mix them up, which causes real outages:
+
+- **VPC and subnet CIDR** (`10.0.0.0/16` here). Real and routable, and where nodes and pods both draw their IPs under the VPC CNI.
+- **Service CIDR** (the cluster's `ClusterIP` range, EKS defaults to `10.100.0.0/16`, or `172.20.0.0/16` if that overlaps your VPC). Virtual and serviced by kube-proxy, it never leaves the node. It is fixed at cluster creation and cannot be changed afterwards, so it must not overlap the VPC or anything you peer with. Let it overlap and service traffic black-holes with no obvious error to point at.
+
+There is deliberately no third "pod CIDR" here, which is worth saying out loud for anyone arriving from kubeadm or GKE. Under the VPC CNI the pod range *is* the subnet range, and that is the whole reason this section exists.
+
+For the project, a `/16` VPC with three `/19` private subnets gives you room to be sloppy and still not run out. That is on purpose, so the network never becomes the thing you are debugging while you are still meeting everything else for the first time.
 
 ---
 
@@ -260,6 +301,8 @@ Put `nat_mode` back to `single` and `terraform apply` when you are done, or `ter
 
 - **Carrying the ECS VPC across.** Three public subnets and nothing private. EKS nodes do not belong in public subnets. Start from the two-tier layout rather than from what worked for ECS.
 - **Sizing private subnets for nodes.** They hold pods too, and under the default CNI every pod is a VPC IP. Size for the pod count.
+- **Forgetting the warm pool when you size.** A node holds a whole spare ENI of IPs by default, so a subnet drains faster than running-pod count suggests. Size with a warm factor, or tune `WARM_IP_TARGET` when space is tight.
+- **Overlapping the service CIDR.** The `ClusterIP` range is fixed at cluster creation and must not overlap the VPC or a peered network. Let it overlap and service traffic black-holes with no obvious error to point at.
 - **Missing the subnet tags.** No `elb` tag means an internet-facing Ingress that never gets a load balancer. No `cluster` tag means the controller ignores the subnet entirely.
 - **Treating endpoints as free money.** A wall of interface endpoints can cost more than the NAT you were trying to avoid. Add the free S3 gateway endpoint and the ECR ones with intent, then measure before adding the rest.
 - **One NAT and calling it highly available.** A single NAT is a single AZ. If that AZ goes, every other AZ loses egress. Fine for dev, name the risk for prod.
