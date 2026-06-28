@@ -1,0 +1,98 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="Control plane vs data plane" id="ep4-p1">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p1-aws" value="AWS-managed account (you never see this)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;verticalAlign=top;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="60" y="60" width="460" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-api" value="kube-apiserver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="100" y="110" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-etcd" value="etcd (3 AZs, encrypted)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="100" y="190" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-sched" value="scheduler + controllers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="100" y="270" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-vpc" value="Your VPC (10.0.0.0/16, from EP3)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e6fff2;strokeColor=#2d9d63;verticalAlign=top;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="620" y="60" width="480" height="420" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-eni" value="control-plane ENIs (reach-in: exec, logs, webhooks)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="660" y="110" width="400" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-n1" value="node 1 (AZ a)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="660" y="200" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-n2" value="node 2 (AZ b)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="800" y="200" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-n3" value="node 3 (AZ c)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="940" y="200" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-note" value="Endpoint: public (locked to your /32) and private. Nodes call the API on 443." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="660" y="300" width="400" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-e1" style="endArrow=classic;dashed=1;html=1;strokeColor=#d6b656" edge="1" parent="1" source="p1-api" target="p1-eni">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-e2" style="endArrow=classic;html=1;strokeColor=#82b366" edge="1" parent="1" source="p1-n1" target="p1-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Three IAM roles" id="ep4-p2">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p2-cluster" value="Cluster role&#10;assumed by: eks.amazonaws.com&#10;policy: AmazonEKSClusterPolicy&#10;job: manage ENIs and LBs for you" style="rounded=1;whiteSpace=wrap;html=1;align=left;fillColor=#dae8fc;strokeColor=#6c8ebf;spacingLeft=8" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-node" value="Node role&#10;assumed by: ec2.amazonaws.com&#10;policies: WorkerNode, ECR read, CNI&#10;+ EBSCSIDriverPolicy (temporary)&#10;job: nodes register, pull, network" style="rounded=1;whiteSpace=wrap;html=1;align=left;fillColor=#d5e8d4;strokeColor=#82b366;spacingLeft=8" vertex="1" parent="1">
+          <mxGeometry x="430" y="80" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-irsa" value="IRSA (next session)&#10;assumed by: a pod service account&#10;via: OIDC provider + projected token&#10;job: least-privilege per-pod IAM" style="rounded=1;whiteSpace=wrap;html=1;align=left;fillColor=#f5f5f5;strokeColor=#999999;spacingLeft=8;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="780" y="80" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-note" value="Tonight: cluster role + node role only. The EBS policy is parked on the node role until IRSA moves it to its own role." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="80" y="230" width="1000" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Access entry flow" id="ep4-p3">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p3-you" value="You&#10;aws sts get-caller-identity ARN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-entry" value="aws_eks_access_entry&#10;maps the ARN to the cluster" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="360" y="120" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-assoc" value="access_policy_association&#10;AmazonEKSClusterAdminPolicy&#10;scope: cluster" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="680" y="115" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-cluster" value="kubectl works" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="1000" y="120" width="120" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-break" value="Break it: remove the entry -> Unauthorized. Fix it: terraform apply re-creates it via the EKS API. Recoverable even when no one has kubectl, because eks:CreateAccessEntry is AWS IAM, separate from k8s RBAC." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="80" y="250" width="1040" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-e1" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-you" target="p3-entry">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-e2" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-entry" target="p3-assoc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-e3" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-assoc" target="p3-cluster">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
