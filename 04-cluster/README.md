@@ -2,7 +2,9 @@
 
 ## Why this episode
 
-Last week you built the VPC. Three AZs, private subnets sized for the CNI, a NAT decision you can defend. It is sitting there empty. This week you drop a Kubernetes control plane on top of it and put a handful of nodes in those private subnets, so that by the end you can run `kubectl get nodes` against a real cluster using your own IAM identity.
+Last week we went through the VPC. Three AZs, private subnets sized for the CNI, a NAT. 
+
+This week we drop a Kubernetes control plane on top of it and put a handful of nodes in those private subnets, so that by the end you can run `kubectl get nodes` against a real cluster using your own IAM identity.
 
 This is the episode that delivers two lines from the project:
 
@@ -10,18 +12,22 @@ This is the episode that delivers two lines from the project:
 
 > Terraform with remote state
 
-The cluster is the foundation everything else bolts onto: Karpenter, the storage layer, Traefik, ArgoCD. Get the IAM and the access model wrong here and you spend the next four weeks fighting it. Get it right and you barely think about it again.
+The cluster is the foundation everything else bolts onto: Karpenter, the storage layer, Traefik, ArgoCD. Get the IAM and the access model wrong here and you wont even get to access your cluster. Get it right and you barely need to think about it. 
 
 One hard rule for tonight, lifted straight from the rubric:
 
-> Reaching for `terraform-aws-modules/eks` is the trap. You write your own module. Wrapping the upstream module does not count.
+> Reaching for the community module `terraform-aws-modules/eks` is the trap (unless you want to skip the learning and fun of building your own module). I would recommend write your own module. 
 
 ## What you walk out with
 
 - A clear mental model of what AWS runs for you (the control plane) and what you run yourself (the data plane).
+
 - Your own `modules/eks`, no upstream module anywhere in the tree.
+
 - A cluster on a current Kubernetes version across three AZs, control plane logging on, the four core addons installed.
+
 - A small managed node group as the bootstrap data plane, sized to host the system pods and nothing more.
+
 - `kubectl` access through your own IAM identity using access entries, plus the scar tissue from locking yourself out and fixing it through Terraform.
 
 ## Prerequisites
