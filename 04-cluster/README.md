@@ -302,4 +302,4 @@ Skip what you know.
 - **`authentication_mode`**: how the cluster authorises identities. `API` (access entries), `CONFIG_MAP` (legacy) or `API_AND_CONFIG_MAP` (both, for migration).
 - **Endpoint access**: whether the cluster API is reachable publicly, privately or both. Lock the public side to known CIDRs.
 
-See you in episode 5, where Karpenter takes over the data plane and the bootstrap nodes step back to just hosting the system pods.
+See you in episode 5! 
