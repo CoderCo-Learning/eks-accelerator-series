@@ -1,12 +1,12 @@
 # Episode 4: The EKS cluster
 
-## Why this episode
+## Today
 
 Last week we went through the VPC. Three AZs, private subnets sized for the CNI, a NAT. 
 
-This week we drop a Kubernetes control plane on top of it and put a handful of nodes in those private subnets, so that by the end you can run `kubectl get nodes` against a real cluster using your own IAM identity.
+This week we create a K8s control plane on top of it and put a handful of nodes in those private subnets, so that by the end you can run `kubectl get nodes` against a real cluster using your own IAM identity.
 
-This is the episode that delivers two lines from the project:
+This is the episode that covers the two lines from the project brief:
 
 > EKS 1.33 or above across 3 AZs with managed node groups
 
@@ -14,13 +14,13 @@ This is the episode that delivers two lines from the project:
 
 The cluster is the foundation everything else bolts onto: Karpenter, the storage layer, Traefik, ArgoCD. Get the IAM and the access model wrong here and you wont even get to access your cluster. Get it right and you barely need to think about it. 
 
-One hard rule for tonight, lifted straight from the rubric:
+One thing for tonight, straight from the EKS rubric:
 
 > Reaching for the community module `terraform-aws-modules/eks` is the trap (unless you want to skip the learning and fun of building your own module). I would recommend write your own module. 
 
-## What you walk out with
+##O Outcome
 
-- A clear mental model of what AWS runs for you (the control plane) and what you run yourself (the data plane).
+- A clear understanding of what AWS runs for you (the control plane) and what you run yourself (the data plane).
 
 - Your own `modules/eks`, no upstream module anywhere in the tree.
 
