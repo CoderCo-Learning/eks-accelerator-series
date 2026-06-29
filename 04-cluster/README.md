@@ -51,7 +51,7 @@ kubectl version --client  # >= 1.33 for a 1.34 server: brew install kubectl
 
 One thing to check before we start: run `aws sts get-caller-identity` and read the `Arn` it prints. That ARN is you. Write it down, you grant it cluster access later in the session and it is the single most common thing people get wrong.
 
-## The shape of the problem
+## The problem
 
 EKS splits the cluster down the middle. AWS owns one half, you own the other. Nearly every confusing thing about EKS comes from not knowing which half you are looking at.
 
@@ -83,7 +83,9 @@ flowchart TB
 Read three things off this before we build:
 
 - **The control plane is not in your VPC.** It runs in an AWS-owned account you have no access to. You reach it over an HTTPS endpoint, nothing else.
+
 - **The control plane still reaches into your VPC.** EKS drops a few elastic network interfaces (ENIs) into your private subnets so the API server can do things like `kubectl exec` and admission webhooks. That is why the cluster needs your subnet ids and why those subnets need spare IPs.
+
 - **Your nodes open the connection to the control plane.** The kubelet on each node dials the API server endpoint on 443. So nodes need a route to that endpoint, public or private. For routine work the traffic flows node to API, the reach-in ENIs are only for things like exec and logs.
 
 > Editable diagram: [`diagrams/ep4-cluster-architecture.drawio`](diagrams/ep4-cluster-architecture.drawio). Three pages: the control-plane / data-plane split, the three IAM roles and the access-entry flow.
@@ -96,7 +98,7 @@ Read three things off this before we build:
 
 **What it costs.** The control plane is a flat fee: `$0.10` per hour, about `$73` a month per cluster, on standard support. That fee buys you a highly available, three-AZ control plane you do not have to operate. The nodes are billed as normal EC2 on top.
 
-**Picking a version is a cost decision.** EKS gives each Kubernetes minor version 14 months of standard support, then 12 months of extended support at `$0.60` an hour, six times the price. The newest version right now is 1.36. The project floor is 1.33, but 1.33 reaches the end of standard support around mid-2026, so a cluster you stand up today on 1.33 is about to start billing at the extended rate. Default to a current standard-support version (this module ships 1.34) and check the AWS support calendar before you pin one. One real rule from this: a cluster nobody upgraded quietly rolled onto extended support and the control plane bill jumped 6x before anyone noticed. Version currency shows up on the invoice.
+**Picking a version is a cost decision.** EKS gives each Kubernetes minor version 14 months of standard support, then 12 months of extended support at `$0.60` an hour, six times the price. The newest version right now is 1.36. The project floor is 1.33, but 1.33 reaches the end of standard support around mid-2026, so a cluster you stand up today on 1.33 is about to start billing at the extended rate. Default to a current standard-support version (this module ships 1.34) and check the AWS support calendar before you pin one. One rule from this: a cluster that is not updated will increase the bills. Known as version currency.
 
 > **What is an ENI?** An elastic network interface is a virtual NIC with its own private IP, attached to something inside a subnet. EKS uses them in two places. The control plane drops a few into your subnets to reach in. The VPC CNI hands one IP per ENI to your pods, which is the EP3 max-pods maths.
 
@@ -104,7 +106,7 @@ Read three things off this before we build:
 
 ## 2. The bootstrap node group
 
-You will run Karpenter for real node autoscaling later. Tonight you need a small fixed node group instead. There is a specific reason why.
+You will use Karpenter for node autoscaling later. Today you just need a small fixed node group instead.
 
 **The chicken and egg.** Karpenter is itself a workload. It runs as a Deployment inside the cluster, watches for unschedulable pods and calls the EC2 API to bring up nodes. Read that again: Karpenter needs a node to run on before it can create any nodes. A brand new cluster with zero nodes and only Karpenter has nowhere to place the Karpenter pod, so nothing ever starts. CoreDNS has the same problem, it is a Deployment that needs somewhere to schedule.
 
@@ -140,7 +142,7 @@ This is where most EKS confusion lives. There are three distinct IAM identities 
 
 **Pod-level identity, which is next time.** Tonight the nodes carry the permissions. Soon you want each pod to get its own tightly scoped role rather than borrowing the node's. There are two ways to do that. Pod Identity is the current AWS default: a small agent on the cluster hands a pod credentials from a mapping you create, with no OIDC provider to stand up. IRSA is the older mechanism, an OIDC provider on the cluster plus a projected service-account token, still required for cases like non-EKS clusters and some cross-account setups. Both get a full session of their own. Your project rubric currently asks for IRSA specifically, so that is what the identity session builds, but know that Pod Identity is where AWS is steering new clusters. Tonight you are not wiring app pods to IAM, so we keep identity out of the way with one honest shortcut.
 
-**The honest shortcut for EBS CSI.** The EBS CSI driver needs permission to create and attach volumes (`ec2:CreateVolume`, `AttachVolume` and friends), bundled in the managed policy `AmazonEBSCSIDriverPolicy`. The proper home for that is a dedicated role the driver assumes rather than the shared node role. The clean modern path is a Pod Identity association on the addon, which needs the Pod Identity Agent and no OIDC provider. IRSA works too. Until you build that next week, attach `AmazonEBSCSIDriverPolicy` to the node role so the driver works for the demo. Flag it in your README as temporary. Calling out your own shortcut is exactly the kind of thing the live review rewards.
+**The shortcut for EBS CSI.** The EBS CSI driver needs permission to create and attach volumes (`ec2:CreateVolume`, `AttachVolume` and friends), bundled in the managed policy `AmazonEBSCSIDriverPolicy`. The proper home for that is a dedicated role the driver assumes rather than the shared node role. The clean modern path is a Pod Identity association on the addon, which needs the Pod Identity Agent and no OIDC provider. IRSA works too. Until you build that next week, attach `AmazonEBSCSIDriverPolicy` to the node role so the driver works for the demo. Flag it in your README as temporary. Calling out your own shortcut is exactly the kind of thing the live review rewards.
 
 > **What is a managed policy?** An IAM policy AWS writes and maintains, identified by an ARN like `arn:aws:iam::aws:policy/AmazonEKSClusterPolicy`. You attach it by reference. AWS keeps it current as the service changes, which is why you use these for the cluster and node roles rather than hand-rolling JSON.
 
@@ -171,23 +173,23 @@ Three of these ship on a new cluster by default (`kube-proxy`, `coredns`, `vpc-c
 
 **Ordering catches people.** `coredns` and `aws-ebs-csi-driver` need somewhere to schedule, so they must come up after the node group exists. `kube-proxy` and `vpc-cni` are part of node bootstrap and come first. In Terraform you express that with `depends_on` from the CoreDNS and EBS addons to the node group, otherwise the addons land before any node is `Ready` and sit `Degraded`.
 
-> **Real-world aside, read after the session: CoreDNS is a quiet outage waiting to happen.** It ships with two replicas by default. That default has taken real clusters down. Two things bite. First, the two pods can land on the same node, so one node dying halves your DNS. A `topologySpreadConstraint` is what stops that. Second, DNS leaves each node through an ENI that has a hard ceiling of roughly 1024 packets per second on that path. A busy cluster with chatty services hammers CoreDNS until queries start timing out at the five-second resolver default. The symptom then looks like random slowness everywhere rather than a DNS problem. The fixes: NodeLocal DNSCache from EP3, plus more CoreDNS replicas spread across nodes. You do not need this tonight. But when someone says "the cluster feels slow" and nothing is obviously wrong, suspect DNS first.
+> **Real-world aside, read after the session: CoreDNS is a quiet outage waiting to happen.** It ships with two replicas by default. That default has taken real clusters down. Two things that cause isssues. First, the two pods can land on the same node, so one node dying halves your DNS. A `topologySpreadConstraint` is what stops that. Second, DNS leaves each node through an ENI that has a hard ceiling of roughly 1024 packets per second on that path. A busy cluster with chatty services hammers CoreDNS until queries start timing out at the five-second resolver default. The symptom then looks like random slowness everywhere rather than a DNS problem. The fixes: NodeLocal DNSCache from EP3, plus more CoreDNS replicas spread across nodes. You do not need this tonight. But when someone says "the cluster feels slow" and nothing is obviously wrong, suspect DNS first.
 
 ## 5. Access entries over aws-auth
 
-Here is the decision tonight turns on. When you create a cluster, only the IAM identity that created it can talk to it. Everyone else, including you if you applied through a CI role, is locked out until you grant access. There are two mechanisms for that grant and one of them is the old way.
+When you create a cluster, only the IAM identity that created it can talk to it. Everyone else, including you if you applied through a CI role, is locked out until you grant access. There are two mechanisms for that grant and one of them is the old way.
 
-**The old way: the aws-auth ConfigMap.** Historically you mapped IAM ARNs to Kubernetes RBAC groups by editing a single ConfigMap called `aws-auth` in `kube-system`. It works. It is also a footgun. It is one YAML object with no validation. A fat-fingered edit silently locks every human out of the cluster. It lives in cluster state rather than the EKS API, so Terraform races the cluster creator to own it. Recovering from a bad edit historically meant assuming the original creator identity. A generation of EKS engineers has a story about being locked out by a bad `aws-auth` edit.
+**The old way: the aws-auth ConfigMap.** Historically you mapped IAM ARNs to Kubernetes RBAC groups by editing a single ConfigMap called `aws-auth` in `kube-system`. It works. It is also a footgun. It is one YAML object with no validation. A small edit can lock people out of the cluster. It lives in cluster state rather than the EKS API, so Terraform races the cluster creator to own it. Recovering from a bad edit historically meant assuming the original creator identity. A generation of EKS engineers has a story about being locked out by a bad `aws-auth` edit.
 
 **The new way: access entries.** Access entries are a first-class EKS API, GA since December 2023 and the recommended model for new clusters. An access entry maps an IAM principal to the cluster. An access policy association then grants that principal a scope of permissions: cluster admin, admin, edit or view, applied cluster-wide or to specific namespaces. It is all the AWS API and all manageable from Terraform. There is no ConfigMap to fat-finger. It is also recoverable from the AWS side, because granting access is an `eks:CreateAccessEntry` call rather than a `kubectl` edit.
 
 **Authentication mode.** A cluster can run in `CONFIG_MAP` (old only), `API_AND_CONFIG_MAP` (both, for migrations) or `API` (access entries only). The EKS default is still `API_AND_CONFIG_MAP` for backwards compatibility, so you set `API` explicitly on a greenfield cluster. One thing to know before you flip it: the transition only goes one way, `CONFIG_MAP` to `API_AND_CONFIG_MAP` to `API`, never back. So starting clean on `API` is the easy path, you never have to walk it back.
 
-> **The line that earns the mark.** `authentication_mode = API`, with your admins declared as explicit access entries rather than leaning on the implicit creator-admin. This module sets `bootstrap_cluster_creator_admin_permissions = false`, so every admin is named in code. Two payoffs. It stays auditable when the creator identity changes. It is also what makes the break-it demo below genuinely lock you out. In production the creator is usually a CI role anyway, so a human always needs an explicit entry.
+> **Another important part.** `authentication_mode = API`, with your admins declared as explicit access entries rather than leaning on the implicit creator-admin. This module sets `bootstrap_cluster_creator_admin_permissions = false`, so every admin is named in code. Two payoffs. It stays auditable when the creator identity changes. It is also what makes the break-it demo below genuinely lock you out. In production the creator is usually a CI role anyway, so a human always needs an explicit entry.
 
 That choice has a sharp edge worth knowing, because the alternative bites people constantly. If you leave `bootstrap_cluster_creator_admin_permissions = true` and also declare an explicit access entry for the very ARN that runs `terraform apply`, the apply fails with `ResourceInUseException`, a 409, because EKS already made that entry for the creator. So you pick one lane. One option keeps creator-admin on, where you never re-declare yourself. The other turns creator-admin off and declares everyone explicitly. We take the second. As a bonus it means removing your entry in the demo genuinely removes your only way in, which is the whole point.
 
-## Deep dive: build it, then break it
+## Build it
 
 Provision the cluster, prove access, then take your own access away and win it back through Terraform.
 
