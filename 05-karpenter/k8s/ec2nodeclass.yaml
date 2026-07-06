@@ -1,0 +1,21 @@
+# How a Karpenter node is built. Edit the two values marked below to match your
+# cluster. Or template them from `terraform output` (node_role_name, discovery_tag).
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  # The EP4 node role, reused so nodes inherit its EC2_LINUX access entry.
+  role: "eks-accel-dev-node"
+  amiSelectorTerms:
+    # Pinned family, latest patched AMI. Expiry (in the NodePool) keeps it fresh.
+    - alias: al2023@latest
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "eks-accel-dev"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "eks-accel-dev"
+  tags:
+    Project: eks-accelerator
+    ManagedBy: karpenter
