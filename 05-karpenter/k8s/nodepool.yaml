@@ -1,0 +1,41 @@
+# What Karpenter may buy and how it may take nodes away.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: general
+spec:
+  template:
+    spec:
+      requirements:
+        # Spot first, on-demand as the fallback in the same pool.
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        # Give Karpenter a category and a generation floor, then let it choose.
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r"]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["4"]
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      # Replace nodes after 30 days so AMIs never go stale.
+      expireAfter: 720h
+  # The runaway-cost seatbelt. A bad replica count cannot buy past this.
+  limits:
+    cpu: "100"
+    memory: 200Gi
+  disruption:
+    # WhenEmptyOrUnderutilized repacks underused nodes. WhenEmpty only removes
+    # fully empty ones. This is the lever the session breaks and re-runs.
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
+    # Never disrupt more than 10% of this pool's nodes at once.
+    budgets:
+      - nodes: "10%"

@@ -1,0 +1,94 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="Provisioning loop" id="ep5-p1">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p1-pod" value="Pending pod&#10;(does not fit)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-kar" value="Karpenter controller&#10;(on the bootstrap group)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="320" y="110" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-np" value="NodePool&#10;(what may I buy)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="320" y="240" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-nc" value="EC2NodeClass&#10;(how the node is built)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="320" y="310" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-ec2" value="New EC2 node&#10;(Spot or on-demand)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="640" y="110" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-run" value="Pod schedules, runs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="640" y="240" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-sqs" value="Interruption queue&#10;(Spot 2-min warning)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="80" y="240" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-note" value="Pending pod to Ready node in 40-60s: Karpenter goes straight to the EC2 fleet API, no Auto Scaling group." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="640" y="320" width="360" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-pod" target="p1-kar"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-np" target="p1-kar"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-nc" target="p1-kar"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="CreateFleet" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-kar" target="p1-ec2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-sqs" target="p1-kar"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Identity and discovery" id="ep5-p2">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p2-sa" value="ServiceAccount&#10;karpenter (kube-system)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-assoc" value="Pod Identity association&#10;(+ Pod Identity Agent addon)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="340" y="100" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-role" value="Controller IAM role&#10;RunInstances, CreateFleet,&#10;PassRole, SQS, pricing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="640" y="90" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-disc" value="Discovery: EC2NodeClass matches subnets and SGs tagged karpenter.sh/discovery = cluster-name. The module adds those tags to the EP3 subnets and the EP4 cluster SG." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="80" y="220" width="800" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-join" value="Join: Karpenter reuses the EP4 node role, so its EC2_LINUX access entry lets new nodes join. A new role would need its own entry, otherwise the node boots and never joins." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="80" y="290" width="800" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=classic;html=1" edge="1" parent="1" source="p2-sa" target="p2-assoc"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=classic;html=1" edge="1" parent="1" source="p2-assoc" target="p2-role"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Disruption lifecycle" id="ep5-p3">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p3-node" value="Karpenter node" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="480" y="80" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-cons" value="Consolidation&#10;(fits on fewer/cheaper)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="120" y="230" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-drift" value="Drift&#10;(no longer matches spec)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="360" y="230" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-exp" value="Expiry&#10;(older than expireAfter)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="600" y="230" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-int" value="Interruption&#10;(Spot reclaim, AWS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="840" y="230" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-brake" value="Brakes: NodePool disruption budget (nodes: 10%) + PodDisruptionBudgets + karpenter.sh/do-not-disrupt. Three reasons are Karpenter on purpose, interruption is AWS taking the node back." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="120" y="340" width="920" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-node" target="p3-cons"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-node" target="p3-drift"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-node" target="p3-exp"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-node" target="p3-int"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored.
+
+region       = "eu-west-2"
+cluster_name = "eks-accel-dev"
+
+# From EP4: cd ../../../../04-cluster/terraform/envs/dev && terraform output node_role_arn
+node_role_arn = "arn:aws:iam::111122223333:role/eks-accel-dev-node"
+
+# From EP4: terraform output cluster_security_group_id
+cluster_security_group_id = "sg-0123456789abcdef0"
+
+# From EP3: cd ../../../../03-networking/terraform/envs/dev && terraform output private_subnet_ids
+private_subnet_ids = ["subnet-aaaa", "subnet-bbbb", "subnet-cccc"]
+
+# Check for the latest v1 patch before you pin.
+karpenter_version = "1.13.0"

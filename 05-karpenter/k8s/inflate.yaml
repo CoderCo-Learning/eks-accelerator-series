@@ -1,0 +1,34 @@
+# A do-nothing workload that reserves CPU. The quickest way to force Karpenter
+# to provision a node. Scale it up and down to watch nodes come and go.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inflate
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: inflate
+  template:
+    metadata:
+      labels:
+        app: inflate
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: inflate
+          image: public.ecr.aws/eks-distro/kubernetes/pause:3.7
+          resources:
+            requests:
+              cpu: "1"
+---
+# A PodDisruptionBudget so consolidation cannot take the whole app down at once.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inflate
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: inflate

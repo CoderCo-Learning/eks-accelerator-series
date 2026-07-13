@@ -10,6 +10,7 @@ Each session is a single topic deep dive. The brief for the project is in [proje
 - [EP 2: Containers](02-containers/README.md)
 - [EP 3: VPC & Network Design](03-networking/README.md)
 - [EP 4: EKS Cluster with Terraform](04-cluster/README.md)
+- [EP 5: Karpenter and Node Autoscaling](05-karpenter/README.md)
 
 ## Platform snapshot
 
