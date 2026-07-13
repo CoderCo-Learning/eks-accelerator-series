@@ -29,6 +29,22 @@ Two boundaries to keep it straight in your head:
 
 The rest of this session is how you write those rules and wire Karpenter into your AWS account safely.
 
+## Why teams reach for it
+
+**The bill drops.** Karpenter packs pods onto the fewest, smallest servers that hold them. It also leans on Spot, spare AWS capacity at up to about 90% off, so most teams see their compute costs fall after they switch.
+
+**New capacity is quick.** A server is usually ready in under a minute, because Karpenter asks EC2 for the exact machine it needs rather than nudging a fixed pool and waiting.
+
+**There is less to babysit.** No scaling groups to size and no guessing instance types months ahead. You set the rules once and it adapts on its own.
+
+A few things people find surprising the first time:
+
+- It chooses from hundreds of instance types rather than a shortlist you keep updated. If your usual size is scarce or pricey, it quietly picks another that fits.
+- It tidies up after itself. When traffic drops and a node is half empty, it moves those pods elsewhere and deletes the empty node.
+- It keeps your servers fresh. Nodes are replaced on a schedule, so you are never running months-old, unpatched images.
+- It handles Spot gracefully. When AWS gives the two-minute reclaim warning, Karpenter drains the node and brings up a replacement before the old one goes.
+- It scales a long way. The same setup runs a two-node dev cluster and a several-thousand-node production one.
+
 ## What you walk out with
 
 - An understanding of how Karpenter picks instances and why it is quicker and tighter than the old Cluster Autoscaler.
@@ -180,7 +196,7 @@ This is the plumbing that makes the difference between "Karpenter launches an in
 
 > **The line that earns the mark on identity.** The Karpenter controller runs on Pod Identity. It does not borrow node-role permissions or carry a static key. The service account `karpenter` in `kube-system` is bound to a dedicated role through an `aws_eks_pod_identity_association`. It is least privilege and it needs no OIDC provider. IRSA is the older route and still valid. Pod Identity is the one to reach for on a 2026 cluster.
 
-**Getting Karpenter nodes to join changed with access entries.** Here is the gotcha that catches everyone who followed an older tutorial. On a cluster in `aws-auth` mode, the node role was mapped in the ConfigMap and any node using it could join. Your EP4 cluster is on access entries in `API` mode, so a node only joins if its role has an `EC2_LINUX` access entry. Because we reuse the EP4 managed-node-group role, whose access entry EKS already made, Karpenter nodes join with nothing extra. Give Karpenter a brand new node role instead and the instances boot then sit there forever, never appearing in `kubectl get nodes`, with no obvious error. If you ever use a separate Karpenter node role, you add the `EC2_LINUX` access entry yourself.
+**A node has to be allowed to join the cluster.** This one catches everyone who followed an older tutorial. Old clusters used a file called `aws-auth`, where you listed the node role and any node using it could join. Your EP4 cluster uses the newer access entries instead, so a node joins only if its role has an `EC2_LINUX` access entry. We reuse the EP4 node role, which already has one, so Karpenter nodes just join. Give Karpenter a brand new role and its servers boot then sit there forever, never showing up in `kubectl get nodes`, with no error to explain why. If you do use a separate role, add the `EC2_LINUX` access entry yourself.
 
 **Karpenter finds subnets and security groups by tag.** The `subnetSelectorTerms` and `securityGroupSelectorTerms` above match on `karpenter.sh/discovery: eks-accel-dev`. Nothing in EP3 or EP4 set that tag, so the module adds it: a `karpenter.sh/discovery` tag on each private subnet and on the cluster security group. Miss this and Karpenter has nowhere to place nodes, so it logs that it found zero subnets and never launches anything. It is the single most common "why is nothing scaling" cause.
 
@@ -259,6 +275,16 @@ A node can leave for four reasons. Know all four, because three of them are Karp
 > **The line that earns the mark.** Spot first with on-demand fallback in one NodePool, an interruption queue so reclaims are graceful, `consolidationPolicy: WhenEmptyOrUnderutilized` for cost, plus a disruption budget and PodDisruptionBudgets so consolidation never takes too much at once. That sentence is the defensible core of a Karpenter setup. It is what the live review asks you to explain.
 
 **Budgets and PDBs are the brakes.** Consolidation and drift move real pods. A disruption budget on the NodePool (`nodes: "10%"`) caps how many nodes Karpenter may disrupt at once. A PodDisruptionBudget on each workload caps how many of its pods can go down together. Set both. Without them, a burst of consolidation can briefly take out more of your app than you meant. For a pod that must never be moved mid-flight, the annotation `karpenter.sh/do-not-disrupt: "true"` takes it out of scope entirely.
+
+## Karpenter at scale
+
+You are running a two-node dev cluster tonight. The same tool runs clusters with thousands of nodes, where a few things that do not matter now become the whole game. Worth knowing before you meet them.
+
+- **You run more than one NodePool.** Big clusters split them by job: one for general web pods, one for memory-heavy work, one for arm64, one that is on-demand only for anything that must not be interrupted. Each pool gets its own rules and limits. Karpenter picks the cheapest pool that fits a pod.
+- **Disruption budgets stop being optional.** With hundreds of nodes, a wave of consolidation can move a lot of pods at once. Budgets and PodDisruptionBudgets are what keep that from turning into a wobble your users feel.
+- **Consolidation churn has a cost.** Aggressive repacking saves money, but it replaces nodes often and every replacement reschedules pods. At scale you tune `consolidateAfter` and the budgets to trade a little cost for calmer nodes.
+- **Spot diversity protects you.** The wider your instance requirements, the more Spot pools Karpenter can spread across, so a price spike or a reclaim in one type barely shows. Narrow requirements concentrate the risk.
+- **You watch it.** At scale you graph how many nodes Karpenter adds and removes, how long pods wait and how often Spot reclaims land. Karpenter ships metrics for all of it.
 
 ## Pitfalls
 
