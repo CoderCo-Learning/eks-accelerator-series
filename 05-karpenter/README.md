@@ -1,8 +1,8 @@
 # Episode 5: Karpenter and node autoscaling
 
-## Why this episode
+## This episode
 
-Last week you stood up a cluster with a small bootstrap node group. Two `t3.large` nodes, fixed, just enough to host the system pods. That was always a placeholder. Your app cannot run on two small nodes. Hand-sizing an Auto Scaling group for real traffic is a job nobody wants. This week Karpenter takes over the data plane. You deploy a workload. Karpenter looks at the pods that will not fit and brings up exactly the nodes they need in under a minute. Scale the workload down and it packs the survivors together and deletes what is now empty.
+Last episode you were able to stand up a cluster with a small bootstrap node group. Two `t3.large` nodes, fixed, just enough to host the system pods. That was always a placeholder. Your app cannot run on two small nodes. Hand-sizing an Auto Scaling group for real traffic is a job nobody wants. This week Karpenter takes over the data plane. You deploy a workload. Karpenter looks at the pods that will not fit and brings up exactly the nodes they need in under a minute. Scale the workload down and it packs the survivors together and deletes what is now empty.
 
 This is the episode that delivers the project line:
 
@@ -10,13 +10,13 @@ This is the episode that delivers the project line:
 
 By the end the bootstrap group goes back to doing one job, hosting Karpenter and CoreDNS, while everything else your project runs lands on nodes Karpenter chose.
 
-The trap tonight, same shape as last week:
+Some issues to address: 
 
 > Do not wire in `terraform-aws-modules/eks//modules/karpenter`. You write the controller IAM, the interruption queue and the associations yourself. The rubric grades your module.
 
 ## What you walk out with
 
-- A mental model of how Karpenter picks instances and why it is quicker and tighter than the old Cluster Autoscaler.
+- An understanding of how Karpenter picks instances and why it is quicker and tighter than the old Cluster Autoscaler.
 - Your own `modules/karpenter`: the controller role on Pod Identity, the Spot interruption queue, the subnet and security-group discovery tags, the Helm release.
 - A `NodePool` and an `EC2NodeClass` that turn "pods need capacity" into real EC2.
 - Workloads scheduling onto Karpenter nodes, then watching consolidation reclaim them when you scale down.
@@ -40,7 +40,7 @@ Tools, on top of last week's:
 helm version    # >= 3.14: brew install helm
 ```
 
-## The shape of the problem
+## The problem
 
 Karpenter sits between unschedulable pods and the EC2 API. It watches the scheduler. The moment a pod cannot be placed, it decides what to launch.
 
@@ -60,7 +60,7 @@ flowchart LR
   sqs["Interruption queue\n(Spot 2-min warning)"] --> kar
 ```
 
-Read three things off this before we build:
+Some things to consider:
 
 - **Karpenter is groupless.** The old Cluster Autoscaler drove Auto Scaling groups, so you pre-declared every instance shape as its own group and it scaled them in fixed steps. Karpenter has no node groups. It reads the pending pods and calls `CreateFleet` for the exact shape that fits, choosing from a wide pool of instance types.
 - **Two objects govern it.** A `NodePool` is the policy, what Karpenter is allowed to buy and how it may disrupt. An `EC2NodeClass` is the AWS detail, how a node is built and where it attaches. You will meet both below.
