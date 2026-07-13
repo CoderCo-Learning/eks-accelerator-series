@@ -2,7 +2,7 @@
 
 ## This episode
 
-Last episode you were able to stand up a cluster with a small bootstrap node group. Two `t3.large` nodes, fixed, just enough to host the system pods. That was always a placeholder. Your app cannot run on two small nodes. Hand-sizing an Auto Scaling group for real traffic is a job nobody wants. This week Karpenter takes over the data plane. You deploy a workload. Karpenter looks at the pods that will not fit and brings up exactly the nodes they need in under a minute. Scale the workload down and it packs the survivors together and deletes what is now empty.
+Last episode you were able to stand up a cluster with a small bootstrap node group. Two `t3.large` nodes, fixed, just enough to host the system pods. That was always a placeholder. Your app cannot run on two small nodes. Sizing servers by hand for real traffic is a job nobody wants. This week Karpenter takes over the job of adding and removing servers for you. You deploy a workload. Karpenter looks at the pods that will not fit and brings up exactly the nodes they need in under a minute. Scale the workload down and it packs the survivors together and deletes what is now empty.
 
 This is the episode that delivers the project line:
 
@@ -13,6 +13,21 @@ By the end the bootstrap group goes back to doing one job, hosting Karpenter and
 Some issues to address: 
 
 > Do not wire in `terraform-aws-modules/eks//modules/karpenter`. You write the controller IAM, the interruption queue and the associations yourself. The rubric grades your module.
+
+## What Karpenter is, in plain terms
+
+New to this? Start here. Kubernetes runs your app inside containers, but those containers still need real servers to run on. On AWS those servers are EC2 instances. Once they are part of your cluster we call them **nodes**. Someone has to decide how many nodes you have and how big they are. Too few and your app has nowhere to run. Too many and you pay for machines sitting idle.
+
+Karpenter makes that decision for you, automatically. It keeps an eye on the cluster and adds a node whenever your app needs more room. When a node ends up mostly empty, it removes it. You stop hand-picking server sizes for good.
+
+Picture a restaurant that adds and folds away tables based on who walks in. A party of ten arrives and a big table appears; they leave and it folds away. Nobody stands at the door each morning guessing how many tables to lay out. Karpenter is that host, except the tables are servers.
+
+Two boundaries to keep it straight in your head:
+
+- Running your app is Kubernetes' job, carried out by your pods. Karpenter only supplies the machines underneath them.
+- You never drive Karpenter by hand. You write the rules down once, what servers it may buy and how big it may grow, then it works on its own.
+
+The rest of this session is how you write those rules and wire Karpenter into your AWS account safely.
 
 ## What you walk out with
 
@@ -70,7 +85,9 @@ Some things to consider:
 
 ## 1. How Karpenter thinks
 
-**The provisioning loop.** Karpenter watches for pods the scheduler has marked unschedulable. It batches them for a moment, works out the smallest set of nodes that would fit them given your NodePool rules, then launches that set through a single `CreateFleet` call. When the node joins, the normal scheduler places the pods. From pending pod to running is routinely 40 to 60 seconds, because Karpenter goes straight to the EC2 fleet API rather than nudging an Auto Scaling group.
+Now how it actually works. Two ideas carry the section: how Karpenter decides what to launch and why that beats the old autoscaler it replaces.
+
+**The provisioning loop.** When a pod cannot fit on any node that already exists, Kubernetes parks it as `Pending`. Karpenter watches for those pending pods. It batches them for a moment, works out the smallest set of nodes that would fit them under your NodePool rules, then launches that set through a single `CreateFleet` call. When the node joins, the normal scheduler places the pods. From pending pod to running is routinely 40 to 60 seconds, because Karpenter goes straight to the EC2 fleet API rather than nudging an Auto Scaling group.
 
 **Bin-packing is the point.** Because Karpenter chooses the instance after it has read the pods, it can pick a shape that fits them snugly. Ten pods that each want 1 vCPU get one node with the headroom for ten, not three oversized nodes from a group you guessed at months ago. Tighter packing is fewer nodes, which is less money.
 
@@ -93,7 +110,7 @@ Two custom resources drive everything. Keeping them straight is half the session
 
 **The NodePool is the policy.** It says what Karpenter may provision and how it may take nodes away. The important parts:
 
-- `requirements`: the allowed instance space, expressed as well-known labels. Capacity type (Spot, on-demand), architecture, instance category and generation. Wide requirements give Karpenter room to find cheap capacity. Narrow ones tie its hands.
+- `requirements`: the allowed instance space, expressed as well-known labels. Capacity type (Spot, on-demand), architecture, instance category (c is compute-optimised, m is general purpose, r is memory-heavy) and generation (a higher number is newer, cheaper hardware). Wide requirements give Karpenter room to find cheap capacity. Narrow ones tie its hands.
 - `limits`: a ceiling on total CPU and memory this NodePool may bring up. This is your runaway-cost seatbelt.
 - `disruption`: when Karpenter is allowed to remove or replace a node. Covered in section 5.
 - `template.spec.nodeClassRef`: which EC2NodeClass to build the node from.
@@ -200,8 +217,8 @@ kubectl scale deployment inflate --replicas=20
 
 # watch Karpenter react
 kubectl get nodeclaims -w
-# NAME            TYPE        CAPACITY   NODE                    READY
-# general-abcde   c6g...      spot       ip-10-0-...             True   ~45s
+# NAME            TYPE          CAPACITY   NODE                    READY
+# general-abcde   c6i.large     spot       ip-10-0-...             True   ~45s
 
 kubectl get nodes -L karpenter.sh/capacity-type
 # the new node shows capacity-type=spot
