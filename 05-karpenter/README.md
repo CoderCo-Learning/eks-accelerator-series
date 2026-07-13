@@ -81,7 +81,7 @@ Some things to consider:
 - **Two objects govern it.** A `NodePool` is the policy, what Karpenter is allowed to buy and how it may disrupt. An `EC2NodeClass` is the AWS detail, how a node is built and where it attaches. You will meet both below.
 - **Karpenter runs on the bootstrap group, never on itself.** It is a Deployment that must live somewhere stable it does not manage. That somewhere is last week's managed node group. This is the whole reason that group exists.
 
-> Editable diagram: [`diagrams/ep5-karpenter-flow.drawio`](diagrams/ep5-karpenter-flow.drawio). Three pages: the provisioning loop, the identity and discovery wiring and the disruption lifecycle.
+> diagram: [`diagrams/ep5-karpenter-flow.drawio`](diagrams/ep5-karpenter-flow.drawio).
 
 ## 1. How Karpenter thinks
 
