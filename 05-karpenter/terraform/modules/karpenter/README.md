@@ -9,7 +9,8 @@ Your own Karpenter module. No `terraform-aws-modules/eks//modules/karpenter`. Th
 - An `aws_eks_pod_identity_association` binding the `karpenter` service account to that role.
 - An SQS interruption queue with EventBridge rules for Spot warnings, rebalance, instance state changes and health events.
 - `karpenter.sh/discovery` tags on the private subnets and the cluster security group, added with `aws_ec2_tag` so the EP3 and EP4 modules stay untouched.
-- The Karpenter controller Helm release (v1), pinned by version, kept off Karpenter-managed nodes with a `karpenter.sh/nodepool DoesNotExist` affinity.
+- The `karpenter-crd` Helm chart, which owns the NodePool, EC2NodeClass and NodeClaim CRDs. Installed before the controller so the kinds exist by the time anyone applies one.
+- The Karpenter controller Helm release (v1), pinned by version, with `skip_crds` so it never fights the CRD chart. The chart's own defaults keep the controller off Karpenter-managed nodes and spread the replicas, so the module adds no affinity override.
 
 ## What it does not create, on purpose
 

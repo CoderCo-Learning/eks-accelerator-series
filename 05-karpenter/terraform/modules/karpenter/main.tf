@@ -18,20 +18,10 @@ locals {
     serviceAccount = {
       name = var.service_account
     }
-    # Keep the controller off nodes Karpenter manages, so a consolidation or a
-    # Spot reclaim can never take out Karpenter itself.
-    affinity = {
-      nodeAffinity = {
-        requiredDuringSchedulingIgnoredDuringExecution = {
-          nodeSelectorTerms = [{
-            matchExpressions = [{
-              key      = "karpenter.sh/nodepool"
-              operator = "DoesNotExist"
-            }]
-          }]
-        }
-      }
-    }
+    # No affinity override on purpose. The chart already keeps the controller off
+    # Karpenter-managed nodes (karpenter.sh/nodepool DoesNotExist) and spreads the
+    # replicas with a pod anti-affinity. Overriding affinity here would drop that
+    # spread and land both replicas on one bootstrap node.
   }
 }
 
@@ -207,16 +197,35 @@ data "aws_iam_policy_document" "controller" {
     }
   }
 
+  # Create and tag the instance profile. Keyed on aws:RequestTag, because the
+  # profile has no tags yet at create time. ResourceTag here would deny the call
+  # and Karpenter could never launch a node.
   statement {
-    sid = "AllowScopedInstanceProfileActions"
+    sid       = "AllowScopedInstanceProfileCreationActions"
+    actions   = ["iam:CreateInstanceProfile", "iam:TagInstanceProfile"]
+    resources = ["arn:${local.partition}:iam::${local.account_id}:instance-profile/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/kubernetes.io/cluster/${var.cluster_name}"
+      values   = ["owned"]
+    }
+    condition {
+      test     = "StringLike"
+      variable = "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass"
+      values   = ["*"]
+    }
+  }
+
+  # Mutate an existing instance profile. Keyed on aws:ResourceTag, because by now
+  # the profile carries the cluster tag applied at creation.
+  statement {
+    sid = "AllowScopedInstanceProfileMutationActions"
     actions = [
-      "iam:CreateInstanceProfile",
-      "iam:TagInstanceProfile",
       "iam:AddRoleToInstanceProfile",
       "iam:RemoveRoleFromInstanceProfile",
       "iam:DeleteInstanceProfile",
     ]
-    resources = ["*"]
+    resources = ["arn:${local.partition}:iam::${local.account_id}:instance-profile/*"]
     condition {
       test     = "StringEquals"
       variable = "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}"
@@ -320,6 +329,21 @@ resource "aws_ec2_tag" "sg_discovery" {
 }
 
 ###############################################################################
+# CRDs first, as their own chart. This is the recommended path: the main chart
+# only installs CRDs on the very first install and never upgrades them. Its
+# bundled CRDs also ignore chart values. The separate karpenter-crd chart owns their
+# lifecycle, so the NodePool and EC2NodeClass kinds exist before anyone applies
+# one. The main chart is told to skip CRDs so the two never fight.
+###############################################################################
+resource "helm_release" "karpenter_crd" {
+  name       = "karpenter-crd"
+  namespace  = var.namespace
+  repository = "oci://public.ecr.aws/karpenter"
+  chart      = "karpenter-crd"
+  version    = var.karpenter_version
+}
+
+###############################################################################
 # The Karpenter controller itself, via Helm. NodePool and EC2NodeClass are
 # applied separately as YAML, so the platform layer owns the policy, not this
 # infra module.
@@ -333,7 +357,11 @@ resource "helm_release" "karpenter" {
 
   values = [yamlencode(local.helm_values)]
 
+  # Do not let the main chart also ship CRDs. karpenter-crd owns them.
+  skip_crds = true
+
   depends_on = [
+    helm_release.karpenter_crd,
     aws_eks_pod_identity_association.controller,
     aws_iam_role_policy.controller,
     aws_sqs_queue.interruption,

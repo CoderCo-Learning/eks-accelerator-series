@@ -178,10 +178,14 @@ cp terraform.tfvars.example terraform.tfvars
 # cluster_security_group_id (EP4 output)
 
 terraform init
-terraform apply        # addon, IAM, SQS, discovery tags, Helm release
+terraform apply        # addon, IAM, SQS, discovery tags, CRDs, Helm release
 
 kubectl get pods -n kube-system -l app.kubernetes.io/name=karpenter
 # karpenter-xxxx   Running   (on a bootstrap node)
+
+# the CRDs come from the karpenter-crd chart. Confirm they exist before you apply one.
+kubectl get crd nodepools.karpenter.sh ec2nodeclasses.karpenter.k8s.aws
+# both listed = ready
 
 # apply the NodePool and EC2NodeClass (edit the cluster name and node role first)
 kubectl apply -f ../../k8s/ec2nodeclass.yaml
