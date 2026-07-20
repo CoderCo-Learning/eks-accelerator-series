@@ -28,9 +28,9 @@ Three words you will hear all night:
 
 You write the PVC. The StorageClass and the PV mostly take care of themselves. That hands-off creation is called **dynamic provisioning**. It is the normal way to do storage on EKS.
 
-## What you walk out with
+## Today
 
-- A plain mental model of PVCs, StorageClasses and the EBS volumes underneath them.
+- An understanding of PVCs, StorageClasses and the EBS volumes underneath them.
 - A `gp3` StorageClass set as the cluster default, plus a `gp3-retain` one for data you never want deleted by accident.
 - The EBS driver running on its own IAM role through IRSA, with the EP4 node-role shortcut removed.
 - A clear picture of how IRSA actually works, earned by breaking it on purpose and reading the error.
@@ -124,7 +124,7 @@ The `parameters` are the EBS settings. `gp3` is the current general-purpose SSD,
 
 **`reclaimPolicy` decides what happens to the disk when you delete the claim.** `Delete` throws the EBS volume away with the PVC. `Retain` keeps it, so a fumbled `kubectl delete` does not wipe your data. You will ship both: `gp3` with `Delete` as the default for scratch space, plus `gp3-retain` with `Retain` for anything that matters, like a database.
 
-## 2. The AZ trap
+## 2. The AZ issue
 
 This is the setting that separates a storage class that works from one that fails at 2am. It is worth the whole section.
 
@@ -157,11 +157,11 @@ The flow at runtime: the driver's pod presents its signed token to AWS STS, the 
 
 > **What is a service account?** An identity for a pod inside Kubernetes, the way a user account is an identity for a person. IRSA is the bridge that turns that in-cluster identity into an AWS identity.
 
-> **The line that earns the mark on identity.** The EBS driver runs on its own IAM role, scoped by a trust policy to exactly one service account, assumed through the cluster OIDC provider. The node-role shortcut from EP4 comes off. Least privilege, giving a thing only the access it needs, means the driver can touch EBS and nothing else can touch the driver's role.
+> **The important part about identity.** The EBS driver runs on its own IAM role, scoped by a trust policy to exactly one service account, assumed through the cluster OIDC provider. The node-role shortcut from EP4 comes off. Least privilege, giving a thing only the access it needs, means the driver can touch EBS and nothing else can touch the driver's role.
 
 **IRSA or Pod Identity?** For a brand new cluster, Pod Identity is the simpler default and the way AWS is steering. IRSA is the one you must still understand, because the whole ecosystem is built on it and you will read trust policies like this for years. That is why we wire EBS the IRSA way here and break it open in the deep dive.
 
-## 4. Wire the driver, remove the shortcut
+## 4. Wire the driver
 
 Two changes turn the shortcut into the real thing:
 
