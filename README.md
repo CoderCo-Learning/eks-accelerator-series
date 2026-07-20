@@ -11,6 +11,7 @@ Each session is a single topic deep dive. The brief for the project is in [proje
 - [EP 3: VPC & Network Design](03-networking/README.md)
 - [EP 4: EKS Cluster with Terraform](04-cluster/README.md)
 - [EP 5: Karpenter and Node Autoscaling](05-karpenter/README.md)
+- [EP 6: Storage and Pod-level IAM](06-storage/README.md)
 
 ## Platform snapshot
 

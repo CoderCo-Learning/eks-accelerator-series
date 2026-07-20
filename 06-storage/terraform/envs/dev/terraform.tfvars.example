@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored.
+
+region       = "eu-west-2"
+cluster_name = "eks-accel-dev"
+
+# From EP4: cd ../../../../04-cluster/terraform/envs/dev && terraform output oidc_issuer_url
+oidc_issuer_url = "https://oidc.eks.eu-west-2.amazonaws.com/id/EXAMPLE1234567890"

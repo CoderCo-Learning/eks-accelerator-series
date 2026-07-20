@@ -1,0 +1,10 @@
+# A three-node local cluster: one control plane and two workers. Two workers
+# make WaitForFirstConsumer and node-bound volumes visible, the same ideas that
+# show up as Availability Zones on EKS.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: storage-lab
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker

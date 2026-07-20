@@ -1,0 +1,28 @@
+# A 1Gi disk and a pod that writes a file to it. The subject of the snapshot.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: demo-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: gp3
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-writer
+spec:
+  containers:
+    - name: writer
+      image: public.ecr.aws/docker/library/busybox:latest
+      command: ["sh", "-c", "echo hello-from-ep6 > /data/hello.txt && sleep 3600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: demo-data

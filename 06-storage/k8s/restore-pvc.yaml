@@ -1,0 +1,33 @@
+# A fresh disk restored from the snapshot, plus a pod that reads the file back.
+# dataSource is what makes the new volume come up pre-loaded.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: demo-restore
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: gp3
+  resources:
+    requests:
+      storage: 1Gi
+  dataSource:
+    name: demo-snap
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-reader
+spec:
+  containers:
+    - name: reader
+      image: public.ecr.aws/docker/library/busybox:latest
+      command: ["sh", "-c", "cat /data/hello.txt && sleep 3600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: demo-restore

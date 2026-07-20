@@ -1,0 +1,35 @@
+# Two pods forced onto different nodes by anti-affinity, both wanting the same
+# ReadWriteOnce disk. One lands where the volume is and reads the file. The other
+# is stuck, because a ReadWriteOnce volume belongs to one node at a time.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: readers
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: readers
+  template:
+    metadata:
+      labels:
+        app: readers
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: readers
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: reader
+          image: busybox
+          command: ["sh", "-c", "cat /data/hello.txt; sleep 3600"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: data

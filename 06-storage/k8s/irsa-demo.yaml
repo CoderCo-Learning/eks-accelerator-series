@@ -1,0 +1,29 @@
+# The IRSA break-it demo. A service account annotated with the demo role, plus a
+# job that runs `aws sts get-caller-identity`. The pod has no AWS keys. If the
+# trust policy matches this service account, it becomes the role. If not, the
+# assume fails with AccessDenied.
+#
+# Edit the role-arn below to `terraform output demo_role_arn`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: irsa-demo
+  namespace: kube-system
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::111122223333:role/eks-accel-dev-irsa-demo"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: irsa-demo
+  namespace: kube-system
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: irsa-demo
+      restartPolicy: Never
+      containers:
+        - name: awscli
+          image: public.ecr.aws/aws-cli/aws-cli:latest
+          command: ["aws", "sts", "get-caller-identity"]

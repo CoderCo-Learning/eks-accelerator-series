@@ -1,0 +1,9 @@
+# Take a point-in-time snapshot of the demo-data volume.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: demo-snap
+spec:
+  volumeSnapshotClassName: ebs-snapclass
+  source:
+    persistentVolumeClaimName: demo-data
