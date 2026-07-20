@@ -1,0 +1,12 @@
+# A request for a 1Gi disk. On the standard class this stays Pending until a pod
+# uses it, because the class binds WaitForFirstConsumer.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi

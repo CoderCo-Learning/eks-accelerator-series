@@ -1,0 +1,18 @@
+# Uses the PVC and writes a file. Applying this is what makes the PVC bind and
+# the disk get created, on whichever node this pod lands.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: writer
+spec:
+  containers:
+    - name: writer
+      image: busybox
+      command: ["sh", "-c", "echo hello-from-the-lab > /data/hello.txt && sleep 3600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data

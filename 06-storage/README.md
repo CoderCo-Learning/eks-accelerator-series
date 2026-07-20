@@ -48,6 +48,8 @@ kubectl get sc                                 # you probably have a gp2 default
 
 You also need the cluster's OIDC issuer URL from EP4 (`terraform output oidc_issuer_url`) and the EBS driver already installed, which it is from EP4.
 
+> New to Kubernetes storage? Warm up on the local Kind lab in [`lab/`](lab/README.md) first. It covers the whole storage half on your laptop, no AWS needed.
+
 ## The problem
 
 Two flows meet tonight. One is a pod asking for a disk. The other is the driver proving it is allowed to make one.

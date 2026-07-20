@@ -1,0 +1,10 @@
+# A second class that keeps the disk when the claim is deleted. Same local-path
+# provisioner, reclaimPolicy Retain instead of Delete. The local mirror of the
+# gp3-retain class from the cloud session.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-retain
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
