@@ -262,4 +262,6 @@ Skip what you know.
 - **VolumeSnapshotClass**: the template for taking snapshots, like a StorageClass for backups.
 - **CRD (Custom Resource Definition)**: how you teach Kubernetes a new object type, like VolumeSnapshot.
 
-See you in episode 7, where this storage finally earns its keep: Postgres and Redis running as StatefulSets, with volumes that survive a restart.
+---
+
+Thank you for attending this session and see you in the next! 
