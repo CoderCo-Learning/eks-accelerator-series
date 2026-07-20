@@ -1,0 +1,85 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="Provisioning flow" id="ep6-p1">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p1-pvc" value="PVC&#10;I want 10Gi gp3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-sc" value="StorageClass gp3&#10;WaitForFirstConsumer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="320" y="120" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-drv" value="EBS CSI driver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="580" y="120" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-ebs" value="EBS volume&#10;in the pod's AZ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="800" y="120" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-pod" value="Pod scheduled\n(AZ now known)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450" vertex="1" parent="1">
+          <mxGeometry x="320" y="240" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-note" value="Binding waits for the pod so the volume is created in the AZ the pod landed in. Immediate binding would guess an AZ and strand the disk." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="580" y="230" width="400" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-pvc" target="p1-sc"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-sc" target="p1-drv"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-drv" target="p1-ebs"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="triggers binding" style="endArrow=classic;html=1;dashed=1" edge="1" parent="1" source="p1-pod" target="p1-sc"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="IRSA trust chain" id="ep6-p2">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p2-sa" value="ServiceAccount&#10;ebs-csi-controller-sa&#10;(annotated with role ARN)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-tok" value="Signed token&#10;from cluster OIDC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="330" y="130" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-sts" value="AWS STS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="560" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-role" value="EBS CSI IAM role&#10;+ AmazonEBSCSIDriverPolicyV2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="730" y="120" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-trust" value="Trust policy: only system:serviceaccount:kube-system:ebs-csi-controller-sa may assume this role, proven by a token from this cluster's OIDC provider. One typo here and every volume op fails with AccessDenied." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="60" y="240" width="910" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=classic;html=1" edge="1" parent="1" source="p2-sa" target="p2-tok"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=classic;html=1" edge="1" parent="1" source="p2-tok" target="p2-sts"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="checks trust" style="endArrow=classic;html=1" edge="1" parent="1" source="p2-sts" target="p2-role"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="temporary keys (1h)" style="endArrow=classic;html=1;dashed=1" edge="1" parent="1" source="p2-role" target="p2-sa"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Snapshot and restore" id="ep6-p3">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p3-pvc" value="demo-data PVC&#10;(hello.txt on it)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-snap" value="VolumeSnapshot&#10;demo-snap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="300" y="120" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-content" value="VolumeSnapshotContent&#10;(EBS snapshot in AWS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="540" y="120" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-restore" value="demo-restore PVC&#10;dataSource: demo-snap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="300" y="250" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-note" value="The restore PVC comes up pre-loaded with hello.txt. Needs the external-snapshotter controller installed, EKS does not ship it." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="540" y="245" width="420" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="snapshot" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-pvc" target="p3-snap"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-snap" target="p3-content"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="restore" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-snap" target="p3-restore"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

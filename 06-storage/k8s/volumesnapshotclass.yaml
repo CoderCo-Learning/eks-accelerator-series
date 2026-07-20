@@ -1,0 +1,8 @@
+# The vending machine for snapshots. Needs the external-snapshotter controller
+# installed first (see k8s/README.md).
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: ebs-snapclass
+driver: ebs.csi.aws.com
+deletionPolicy: Delete
