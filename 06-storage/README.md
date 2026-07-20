@@ -2,9 +2,11 @@
 
 ## This episode
 
-Everything you have run so far has been stateless. Kill a pod and it comes back with a blank disk. Nobody minds. Next week you run Postgres, which minds a great deal. A database that forgets everything when its pod restarts is not a database. So this week you give the cluster real, durable storage on AWS. You also teach one pod how to prove who it is to AWS, so it can manage that storage safely.
+Everything you have run so far has been stateless. Kill a pod and it comes back with a blank disk. 
 
-Two things ship tonight. Real disks that survive a pod restart, backed by EBS. And the first proper piece of pod-level IAM in the project, wired the classic way with IRSA.
+A database that forgets everything when its pod restarts is not a database. So this week you give the cluster real, durable storage on AWS. You also teach one pod how to prove who it is to AWS, so it can manage that storage safely.
+
+Two things we go through today. Real disks that survive a pod restart, backed by EBS. And the first proper piece of pod-level IAM in the project, wired the classic way with IRSA.
 
 This delivers the project line:
 
@@ -20,7 +22,7 @@ New to this? Start here. A container has its own little disk, but that disk is t
 
 So Kubernetes lets a pod ask for a disk that lives separately from it and outlives it. On AWS that disk is an **EBS volume**, a real block device you could think of as a USB drive that Amazon plugs into whichever server your pod lands on. If the pod moves, the drive gets unplugged and plugged back in next to it.
 
-Three words you will hear all night:
+3 important concepts:
 
 - A **PersistentVolumeClaim** (PVC) is a pod saying "I need a 10Gi disk, please". It is a request.
 - A **StorageClass** is the vending machine that fulfils the request. It knows how to go to AWS and create the actual EBS volume.
