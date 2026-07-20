@@ -1,0 +1,61 @@
+# Valkey (the open-source Redis engine) on a StatefulSet. Append-only
+# persistence on, password from the Secret, a right-sized disk.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+spec:
+  serviceName: valkey
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey
+  template:
+    metadata:
+      labels:
+        app: valkey
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:8
+          ports:
+            - containerPort: 6379
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: valkey
+                  key: VALKEY_PASSWORD
+            # valkey-cli reads this, so the probe needs no password on the CLI.
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: valkey
+                  key: VALKEY_PASSWORD
+          command: ["valkey-server"]
+          # $(VALKEY_PASSWORD) is expanded by Kubernetes from the env above.
+          args:
+            - "--appendonly"
+            - "yes"
+            - "--dir"
+            - "/data"
+            - "--requirepass"
+            - "$(VALKEY_PASSWORD)"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp3
+        # Smaller than Postgres on purpose. A cache holds far less.
+        resources:
+          requests:
+            storage: 8Gi

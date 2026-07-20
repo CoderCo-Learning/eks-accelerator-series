@@ -1,0 +1,16 @@
+# Headless Service (clusterIP: None). No virtual IP. It gives each pod its own
+# DNS name, so the app reaches postgres-0.postgres.<namespace>.svc directly.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

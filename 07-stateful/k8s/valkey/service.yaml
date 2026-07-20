@@ -1,0 +1,15 @@
+# Headless Service for Valkey, so valkey-0.valkey resolves to the pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  labels:
+    app: valkey
+spec:
+  clusterIP: None
+  selector:
+    app: valkey
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: 6379

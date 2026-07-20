@@ -12,6 +12,7 @@ Each session is a single topic deep dive. The brief for the project is in [proje
 - [EP 4: EKS Cluster with Terraform](04-cluster/README.md)
 - [EP 5: Karpenter and Node Autoscaling](05-karpenter/README.md)
 - [EP 6: Storage and Pod-level IAM](06-storage/README.md)
+- [EP 7: Postgres and Redis on StatefulSets](07-stateful/README.md)
 
 ## Platform snapshot
 

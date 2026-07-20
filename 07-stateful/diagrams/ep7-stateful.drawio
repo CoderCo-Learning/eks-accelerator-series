@@ -1,0 +1,82 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="StatefulSet identity" id="ep7-p1">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p1-sts" value="StatefulSet postgres&#10;replicas: 1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="80" y="140" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-pod" value="Pod postgres-0&#10;(stable name)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="360" y="140" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-pvc" value="PVC data-postgres-0&#10;(from volumeClaimTemplate)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="620" y="140" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-ebs" value="EBS volume&#10;(gp3, one AZ)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="900" y="140" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-note" value="Delete postgres-0 and the StatefulSet remakes it with the same name, which reattaches to the same PVC. The name and the disk are a married pair." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="360" y="250" width="700" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-sts" target="p1-pod"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" value="owns" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-pod" target="p1-pvc"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=classic;html=1" edge="1" parent="1" source="p1-pvc" target="p1-ebs"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Headless DNS" id="ep7-p2">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p2-app" value="your app" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="80" y="160" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-normal" value="Normal Service&#10;one virtual IP, load-balances&#10;(wrong for a database)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450" vertex="1" parent="1">
+          <mxGeometry x="300" y="80" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-headless" value="Headless Service (clusterIP: None)&#10;postgres-0.postgres.default.svc&#10;-> exactly pod postgres-0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="300" y="220" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-pod" value="Pod postgres-0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="680" y="235" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-note" value="A normal Service rings whoever is free. A headless Service gives each pod its own direct line, which is what you need when the pods are not interchangeable." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="80" y="330" width="760" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=classic;html=1;dashed=1;strokeColor=#b85450" edge="1" parent="1" source="p2-app" target="p2-normal"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" value="connect by name" style="endArrow=classic;html=1;strokeColor=#82b366" edge="1" parent="1" source="p2-app" target="p2-headless"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=classic;html=1" edge="1" parent="1" source="p2-headless" target="p2-pod"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="AZ-pinning" id="ep7-p3">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p3-aza" value="AZ-a" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e6fff2;strokeColor=#2d9d63;verticalAlign=top;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="320" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-azb" value="AZ-b" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;verticalAlign=top;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="460" y="80" width="320" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-pod" value="postgres-0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="120" y="130" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-ebs" value="EBS data-postgres-0&#10;(lives in AZ-a)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="120" y="220" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-ghost" value="postgres-0 tries to move here&#10;then cannot attach its volume&#10;Pending: node affinity conflict" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="500" y="140" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-note" value="Pin the pod to AZ-a and accept it as the failure domain. Or replicate across AZs with an operator. Do not stretch one EBS volume across zones." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="80" y="340" width="700" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="welded to" style="endArrow=classic;html=1" edge="1" parent="1" source="p3-pod" target="p3-ebs"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" value="cannot follow" style="endArrow=classic;html=1;dashed=1;strokeColor=#b85450" edge="1" parent="1" source="p3-pod" target="p3-ghost"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
